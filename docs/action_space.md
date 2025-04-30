@@ -1,5 +1,3 @@
-### New File: `docs/action_space.md`
-
 # ARC Action Space (`arc_env/action_space.py`)
 
 This document details the `ARCActionSpace` class, which provides a structured action space for reinforcement learning agents interacting with the Abstraction and Reasoning Corpus (ARC) environment (`ARCEnv`).
