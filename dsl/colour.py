@@ -67,4 +67,77 @@ class ColorSelector:
     colour_9, colour_9.__name__ = partial(colour, colour=9), "colour_9"
     colour_10, colour_10.__name__ = partial(colour, colour=10), "colour_10"
 
-    
+    @staticmethod
+    def most_common(grid: np.ndarray) -> int:
+        """Colour that occurs most frequently."""
+        ColorSelector._check_grid(grid)
+        counts = np.bincount(grid.ravel(),
+                                minlength=ColorSelector.num_colours)
+        return int(counts.argmax())
+
+    @staticmethod
+    def least_common(grid: np.ndarray) -> int:
+        """Rarest colour that is **present** (ties broken arbitrarily)."""
+        ColorSelector._check_grid(grid)
+        counts = np.bincount(grid.ravel(),
+                                minlength=ColorSelector.num_colours)
+        counts[counts == 0] = ColorSelector._big
+        return int(counts.argmin())
+
+    @staticmethod
+    def nth_most_common(grid: np.ndarray, *, rank: int) -> int:
+        if rank < 0:
+            raise ValueError("rank must be non-negative")
+        ColorSelector._check_grid(grid)
+
+        counts = np.bincount(grid.ravel(),
+                                minlength=ColorSelector.num_colours)
+        order = np.argsort(counts)[::-1]
+        return int(order[rank]) if rank < len(order) else ColorSelector.least_common(grid)
+
+    # rename the partials after defining nth_most_common
+    second_most_common, second_most_common.__name__  = partial(nth_most_common, rank=1), "second_most_common"
+    third_most_common, third_most_common.__name__    = partial(nth_most_common, rank=2), "third_most_common"
+    fourth_most_common, fourth_most_common.__name__  = partial(nth_most_common, rank=3), "fourth_most_common"
+    fifth_most_common, fifth_most_common.__name__    = partial(nth_most_common, rank=4), "fifth_most_common"
+    sixth_most_common, sixth_most_common.__name__    = partial(nth_most_common, rank=5), "sixth_most_common"
+    seventh_most_common, seventh_most_common.__name__ = partial(nth_most_common, rank=6), "seventh_most_common"
+    eighth_most_common, eighth_most_common.__name__   = partial(nth_most_common, rank=7), "eighth_most_common"
+
+    @staticmethod
+    def nth_most_independent(grid: np.ndarray,
+                                *,
+                                rank: int,
+                                connectivity: int = 4) -> int:
+        """
+        Return the colour whose single‐cell, non‐background components
+        (under the given 4- or 8-connectivity) ranks `rank` in size.
+        Rank 0 → most independent squares; rank=1 → second most; etc.
+        If rank is out of range, returns the colour with the fewest.
+        """
+        if rank < 0:
+            raise ValueError("rank must be non-negative")
+        ColorSelector._check_grid(grid)
+
+        # 1) count independent squares for each colour
+        counts = np.zeros(ColorSelector.num_colours, dtype=int)
+        for col in range(ColorSelector.num_colours):
+            mask = GridSelector.independent_cells(grid, col, connectivity)
+            counts[col] = int(mask.sum())
+
+        # 2) sort colours by descending count (tie‐break by lower colour id)
+        order = np.argsort(counts)[::-1]
+
+        # 3) pick the rank-th, or the last one if rank >= num_colours
+        idx = rank if rank < order.size else -1
+        return int(order[idx])
+
+    most_independent_cells, most_independent_cells.__name__ = partial(nth_most_independent, rank=0), "most_independent_cells"
+    second_most_independent_cells, second_most_independent_cells.__name__ = partial(nth_most_independent, rank=1), "second_most_independent_cells"
+    third_most_independent_cells, third_most_independent_cells.__name__ = partial(nth_most_independent, rank=2), "third_most_independent_cells"
+
+    # ───────────────────────────────────────────────────────────── #
+    # Shape-aware selector
+    # ───────────────────────────────────────────────────────────── #
+
+
