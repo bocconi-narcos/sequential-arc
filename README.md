@@ -37,7 +37,6 @@ This command runs all available solvers against their tasks and reports the pass
 -   `--render`: Display a plot showing the initial state, the final state after applying the solver's actions, and the target state for each task pair.
 -   `--pair <index>`: Only evaluate a specific task pair (0-based index) for the selected solvers.
 -   `--stepwise`: Render the state after each action step. Requires `--pair` to be specified.
--   `--seed <int>`: Set the random number generator seed for reproducibility (default: 0).
 
 **Example:**
 
