@@ -139,5 +139,26 @@ class ColorSelector:
     # ───────────────────────────────────────────────────────────── #
     # Shape-aware selector
     # ───────────────────────────────────────────────────────────── #
+    @staticmethod
+    def colour_of_nth_largest_shape(grid: np.ndarray, *, rank: int) -> int:
+        if rank < 0:
+            raise ValueError("rank must be non-negative")
+        ColorSelector._check_grid(grid)
 
+        sizes, colours_of_shapes = [], []
+        for colour in np.unique(grid):
+            mask = grid == colour
+            lbl, num = label(mask, structure=ColorSelector._FOUR)
+            if num == 0:
+                continue
+            component_sizes = np.bincount(lbl.ravel())[1:]
+            sizes.extend(component_sizes)
+            colours_of_shapes.extend([colour] * len(component_sizes))
+
+        if not sizes:
+            return ColorSelector.most_common(grid)
+
+        order = np.argsort(sizes)[::-1]
+        idx = order[rank] if rank < len(order) else order[-1]
+        return int(colours_of_shapes[idx])
 
