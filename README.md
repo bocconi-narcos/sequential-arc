@@ -53,9 +53,6 @@ This command runs all available solvers against their tasks and reports the pass
 - `--stepwise`  
   Render the state after each action step. Requires `--pair` to be specified. Useful for debugging a sequence.
 
-- `--seed <int>`  
-  Set the random number generator seed for reproducibility (default: `0`).
-
 #### Example:
 
 Test only the solver `1e0a9b12` on its third task pair (index 2), render the final comparison plot, and also render each intermediate step:
