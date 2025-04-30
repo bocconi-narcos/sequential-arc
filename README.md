@@ -13,6 +13,19 @@ This project aims to solve tasks from the Abstraction and Reasoning Corpus (ARC)
         3.  **Transformation:** Applying a transformation to the selected elements (logic in `transformation.py`).
 -   **Solvers (`solvers/`):** This directory contains specific solvers or approaches developed for individual ARC tasks, potentially serving as baselines or components.
 
+## Usage
+
+### Verifying Solvers (`check_solvers.py`)
+
+This script verifies that the implemented solvers in the `solvers/` directory correctly solve their corresponding ARC challenge pairs.
+
+**Basic Usage:**
+
+To run the check for all implemented solvers:
+
+```bash
+python [check_solvers.py](http://_vscodecontentref_/0)
+
 ## Current Status
 
 The basic RL environment is implemented, capable of selecting actions defined in `action_space.py` based on the configuration in `action_config`. The composite action structure (colour -> selection -> transformation) is established. The `solvers` directory contains initial solutions for some tasks.
