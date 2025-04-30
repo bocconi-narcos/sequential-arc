@@ -1,23 +1,27 @@
-# SPDX‑License‑Identifier: MIT
-# Author: Your Name <you@example.com>
-
 """
-Grid‑selection utilities for ARC‑style tasks.
+Grid-Selection Utilities for ARC-Style Tasks
+============================================
 
-Design principles
-─────────────────
-* One **public selector = one clearly named method**.
-* Unified signature compatible with ``functools.partial``:
+This module provides a lightweight, NumPy-friendly API for selecting
+and analyzing regions within 2D integer grids, following ARC conventions.
 
-        selector(grid: np.ndarray,
-                 colour: int | None = None,
-                 **kwargs) -> np.ndarray | np.ndarray[bool, 3‑D]
+Design Principles
+-----------------
+- **One selector per method**: Each public method implements exactly one
+  selection primitive, named clearly to reflect its behavior.
+- **Unified signature**: All selectors accept:
+  
+    grid:   np.ndarray of shape (H, W) and integer dtype  
+    colour: int (optional) — ignored if unused  
+    **kwargs: selector-specific parameters  
 
-  *If* a selector does not need the ``colour`` argument (e.g. ``all_cells``),
-  it is silently ignored.
+  and return either a boolean mask of shape (H, W), or a stack of masks
+  of shape (N, H, W) for multi-region selectors.
 
-* Light internal validation → no external ``dsl.utilities.*`` dependency.
-* Numpy‑friendly (all heavy work is vectorised; SciPy only for ``label``).
+- **Vectorized internally**: Leverages NumPy and SciPy for performance,
+  no external DSL dependencies.
+- **Minimal validation**: Only basic checks on grid shape and dtype;
+  extra arguments are silently ignored if not needed.
 """
 
 from __future__ import annotations
