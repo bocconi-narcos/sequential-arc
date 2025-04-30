@@ -16,8 +16,6 @@ The RL environment (`ARCEnv`) and the structured action space (`ARCActionSpace`)
 
 ## Installation
 
-*(Placeholder: Add installation instructions here, e.g., cloning the repo, setting up a virtual environment, installing dependencies via `requirements.txt` or `pyproject.toml`)*
-
 ```bash
 git clone <your-repo-url>
 cd <your-repo-name>
