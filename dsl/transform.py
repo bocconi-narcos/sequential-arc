@@ -10,7 +10,6 @@ Contract
 
 Returned value is always a *new* 2-D integer grid (no in-place mutation).
 
-© 2025 – MIT licence
 """
 from __future__ import annotations
 
