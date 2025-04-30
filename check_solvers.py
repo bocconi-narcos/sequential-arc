@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 Verify every solver in `solvers/` really solves its challenge.
 """
