@@ -1,6 +1,3 @@
-# SPDX‑License‑Identifier: MIT
-# Author: Your Name <you@example.com>
-
 """
 ARC Gymnasium environment that plays nicely with the new `ARCActionSpace`.
 
