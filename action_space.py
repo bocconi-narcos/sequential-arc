@@ -54,11 +54,37 @@ class ARCActionSpace(gym.Space):
 
     If *mode* == "joint": exposes one gigantic Discrete space of size
     C × S × T.  Good for single‑head agents / tabular baselines.
+
+    Note on Hierarchical Action Space:
+    The 'factorized' mode, which utilizes a `gym.spaces.Dict` containing three
+    discrete subspaces ("colour", "selection", "transform"), directly addresses
+    the requirement for a hierarchical action setup. In this mode, an agent
+    is expected to predict three separate discrete action choices, one for each
+    component of the overall action. This aligns with scenarios where an agent
+    architecture might have multiple output heads for different action dimensions.
+    The issue's reference to "a number in R^3" is interpreted in this context
+    as predicting three indices for these discrete spaces, rather than a continuous
+    3D vector.
     """
 
     metadata = {"render.modes": []}
 
     def __init__(self, *, preset: str = "default", mode: str = "factorized") -> None:
+        """
+        Initialize the ARCActionSpace.
+
+        Args:
+            preset: The name of the action preset to use (defined in `action_config.py`).
+                    Defaults to "default".
+            mode: The mode of operation for the action space.
+                  - "factorized": A dictionary space with separate entries for
+                                  "colour", "selection", and "transform".
+                  - "joint": A single discrete space combining all action components.
+                  Defaults to "factorized".
+
+        Raises:
+            ValueError: If the preset or mode is unknown.
+        """
         if preset not in PRESETS:
             raise ValueError(f"Unknown preset '{preset}'.  Available: {list(PRESETS)}")
         if mode not in ("factorized", "joint"):
@@ -96,15 +122,42 @@ class ARCActionSpace(gym.Space):
     # Gymnasium API proxy
     # ------------------------------------------------------------------ #
     def sample(self, mask: Dict | None = None):
+        """
+        Sample an action from the action space.
+
+        Args:
+            mask: An optional mask to restrict the sampling.
+                - If `mode == "factorized"`, the mask should be a dictionary
+                  mapping subspace keys (e.g., "colour", "selection", "transform")
+                  to their respective masks. If a key is missing, it's assumed
+                  that no mask is applied to that subspace.
+                - If `mode == "joint"`, the mask should be a mask compatible
+                  with `gym.spaces.Discrete.sample()`.
+        """
         return self.space.sample(mask)
 
+    def seed(self, seed=None):
+        """Seed the PRNG of this space and the underlying Gymnasium space."""
+        super().seed(seed)
+        self.space.seed(seed)
+
     def contains(self, x) -> bool:
+        """
+        Check if an action `x` is a valid member of this action space.
+
+        Args:
+            x: The action to check.
+
+        Returns:
+            True if `x` is a member of this space, False otherwise.
+        """
         return self.space.contains(x)
 
     # ------------------------------------------------------------------ #
     # Encode / decode
     # ------------------------------------------------------------------ #
-    def _decode_joint(self, idx: int):
+    def _decode_joint(self, idx: int) -> Tuple[int, int, int]:
+        """Helper to decode a joint action index into (c, s, t) indices."""
         c = idx // (self._S * self._T)
         s = (idx // self._T) % self._S
         t = idx % self._T
@@ -192,6 +245,15 @@ class ARCActionSpace(gym.Space):
         return fn.__qualname__ + "()"
 
     def action_to_str(self, action) -> str:
+        """
+        Convert an action to a human-readable string representation.
+
+        Args:
+            action: The action to convert (in the format corresponding to `self.mode`).
+
+        Returns:
+            A string describing the action.
+        """
         c_fn, s_fn, t_fn = self.decode(action)
         return (f"[Colour] {self._fn_to_str(c_fn)}  →  "
                 f"[Select] {self._fn_to_str(s_fn)}  →  "
@@ -202,6 +264,13 @@ class ARCActionSpace(gym.Space):
     # ------------------------------------------------------------------ #
     @property
     def sizes(self) -> Dict[str, int]:
+        """
+        Get the sizes of the individual action component libraries.
+
+        Returns:
+            A dictionary mapping component names ("colour", "selection", "transform")
+            to the number of available functions in their respective libraries.
+        """
         return {"colour": self._C, "selection": self._S, "transform": self._T}
 
     # delegate other special methods to inner space

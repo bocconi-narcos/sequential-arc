@@ -94,7 +94,38 @@ def _extract_grids(raw: Dict[str, Any]) -> Tuple[np.ndarray, np.ndarray]:
 # Main environment
 # ───────────────────────────────────────────────────────────────────── #
 class ARCEnv(gym.Env):
-    metadata = {"render_modes": []}  # reserved
+    """
+    A Gymnasium environment for the Abstraction and Reasoning Corpus (ARC).
+
+    The environment loads ARC challenges from JSON files. Each step involves applying
+    a three-part hierarchical action (colour, selection, transformation) to an
+    input grid. The goal is to transform the input grid into the target grid.
+
+    Observation Space:
+        A 2-channel NumPy array of shape (canvas_size, canvas_size, 2).
+        - Channel 0: The current working grid.
+        - Channel 1: The target grid for the current challenge.
+        Values represent colours (0-9, typically).
+
+    Action Space:
+        An `ARCActionSpace` instance, which can be in "factorized" (Dict) or
+        "joint" (Discrete) mode. This space defines the available DSL functions
+        for colouring, selecting, and transforming grid regions.
+
+    Reward:
+        The reward is based on the change in maximum overlap between the current
+        grid and the target grid. Penalties are applied for no-change actions,
+        mismatched shapes, and producing an all-one-colour grid (truncation).
+        A bonus is given for successfully solving the challenge.
+
+    Internal Mechanics:
+        The environment does not currently use a BFS-style frontier as mentioned
+        in the module docstring, but processes one action at a time on the current
+        grid state. The `_frontier` and `_info_q` are initialized but not used
+        in the current `step` logic. (Note: This might be a point for future review
+        or refactoring if the frontier logic is intended to be active).
+    """
+    metadata = {"render_modes": ["human"], "render_fps": 4}  # reserved
 
     # ------------------------------- #
     # Construction
@@ -114,6 +145,31 @@ class ARCEnv(gym.Env):
         max_branch: int = 1,
         seed: int | None = None,
     ) -> None:
+        """
+        Initialize the ARC Environment.
+
+        Args:
+            challenges_json: Path to the JSON file containing ARC challenge definitions.
+            solutions_json: Path to the JSON file containing ARC solution definitions
+                            (used for evaluation, not directly during training steps).
+            action_space: An initialized `ARCActionSpace` instance.
+            canvas_size: The height and width of the observation grid. Grids smaller
+                         than this will be padded. Defaults to 30.
+            step_penalty: Penalty for actions that improve overlap by <= 0 but don't
+                          result in no change. Defaults to 1.
+            shape_penalty: Additional penalty if the grid shape doesn't match the target
+                           shape and overlap improvement is <=0. Defaults to 1.
+            no_change_penalty: Penalty for actions that result in no change to the grid.
+                               Defaults to 5.
+            trunc_penalty: Penalty for producing an all-one-colour grid if it's not
+                           the solution. Defaults to 100.
+            completion_bonus: Bonus reward for successfully solving the challenge.
+                              Defaults to 25.
+            max_branch: (Currently unused) Intended for BFS-style exploration.
+                        Defaults to 1.
+            seed: Optional seed for the environment's random number generator.
+                  Defaults to None.
+        """
         super().__init__()
 
         # Canvas size
@@ -148,7 +204,8 @@ class ARCEnv(gym.Env):
 
         # exposed vars
         self.state: np.ndarray | None = None
-        self.info: Dict[str, Any] | None = None
+        self.info: Dict[str, Any] | None = None # Information about the current episode
+        self._last_render: Dict[str, Any] = {} # Data for the last rendered step
 
     # ------------------------------- #
     # Private helpers
@@ -160,11 +217,34 @@ class ARCEnv(gym.Env):
         index: int | None = None
     ) -> Tuple[np.ndarray, np.ndarray, str]:
         """
-        Sample a (input, target, key) tuple.
-        - If key is None, choose one at random (subject to min_examples).
-        - If key is given, force that challenge (error if missing or too few examples).
-        - If index is given, pick self._challenges[key]['train'][index] (error if OOB).
-        - Otherwise pick a random train example.
+        Sample a (input_grid, output_grid, challenge_key) tuple from the loaded challenges.
+
+        This method selects a challenge based on the provided criteria. It can pick a
+        random challenge, a specific challenge by its key, or a specific
+        input-output pair within a challenge by its index.
+
+        Args:
+            key: If provided, forces the selection of the challenge with this key.
+                 An error is raised if the key is not found or if the challenge
+                 does not meet `min_examples` criteria.
+            min_examples: If provided, only challenges with at least this many
+                          training examples are considered for random selection.
+            index: If provided along with `key`, selects the specific training
+                   example at this index within the chosen challenge. An error
+                   is raised if the index is out of bounds.
+
+        Returns:
+            A tuple containing:
+                - input_grid (np.ndarray): The input grid for the sampled example.
+                - output_grid (np.ndarray): The target output grid for the sampled example.
+                - challenge_key (str): The key of the challenge from which the example was sampled.
+
+        Raises:
+            ValueError: If no challenges meet `min_examples`, or if a specified
+                        challenge does not meet `min_examples`, or if input/output
+                        grids are invalid in the JSON data.
+            KeyError: If a specified `key` is not found in the loaded challenges.
+            IndexError: If a specified `index` is out of bounds for the selected challenge.
         """
         # 1) filter by min_examples
         viable_keys = self._keys
@@ -338,7 +418,32 @@ class ARCEnv(gym.Env):
         plt.tight_layout()
         plt.show()
     
-    def step(self, action):
+    def step(self, action) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        """
+        Execute one time step within the environment.
+
+        Applies the given action to the current grid state, calculates the reward,
+        and determines if the episode has terminated or truncated.
+
+        Args:
+            action: An action compatible with `self.action_space`. This will be
+                    decoded into colour, selection, and transformation functions.
+
+        Returns:
+            A tuple (observation, reward, terminated, truncated, info):
+            - observation (np.ndarray): The new state of the environment, with the
+                                      transformed grid in channel 0 and the target
+                                      grid in channel 1.
+            - reward (float): The reward achieved by the action.
+            - terminated (bool): Whether the episode has ended successfully (target reached).
+            - truncated (bool): Whether the episode has ended due to a condition like
+                                producing an all-one-colour grid (and not solving).
+            - info (Dict[str, Any]): A dictionary containing auxiliary diagnostic
+                                     information (e.g., 'key', 'actions', 'solved').
+
+        Raises:
+            AssertionError: If `reset()` has not been called before `step()`.
+        """
         assert self.state is not None, "Call reset() before step()."
         prev_inp = unpad_grid(self.state[..., 0])
         target   = unpad_grid(self.state[..., 1])
@@ -349,28 +454,36 @@ class ARCEnv(gym.Env):
         sel_mask  = select_fn(prev_inp, colour)
         next_grid = transform_fn(prev_inp, sel_mask)
 
-        # ---------- reward ------------------------------------------------ #
+        # ---------- Reward calculation ------------------------------------ #
+        # Penalize if the grid hasn't changed
         if next_grid.shape == prev_inp.shape and np.array_equal(next_grid, prev_inp):
             reward = -self._no_change_penalty
         else:
+            # Calculate reward based on change in overlap with target
             prev_overlap = _maximum_overlap(prev_inp, target)
             curr_overlap = _maximum_overlap(next_grid, target)
-            reward = (curr_overlap - prev_overlap) * 100  # scale
+            reward = (curr_overlap - prev_overlap) * 100  # Scale to be more significant
+
+            # Penalize if no improvement or negative improvement
             if reward <= 0:
                 reward -= self._step_penalty
+                # Additional penalty if shape also doesn't match target
                 if next_grid.shape != target.shape:
                     reward -= self._shape_penalty
 
-        # ---------- termination / truncation ----------------------------- #
+        # ---------- Termination and Truncation conditions ----------------- #
+        # Terminated if the current grid matches the target grid
         terminated = bool(next_grid.shape == target.shape and np.array_equal(next_grid, target))
-        truncated  = bool(len(np.unique(next_grid)) == 1)   # all one colour
+        # Truncated if the grid becomes a single solid color (and is not the solution)
+        truncated  = bool(len(np.unique(next_grid)) == 1 and not terminated)
 
         if terminated:
-            reward += self._bonus
-        if truncated and not terminated:
-            reward -= self._trunc_penalty
+            reward += self._bonus  # Add completion bonus
+        if truncated: # No need to check 'and not terminated' due to earlier logic
+            reward -= self._trunc_penalty # Penalize for collapsing to single color
 
-        # ---------- bookkeeping ----------------------------------------- #
+        # ---------- Bookkeeping ----------------------------------------- #
+        assert self.info is not None # Should be initialized in reset
         self.info["actions"].append(action)
         self.info["action_desc"].append(self.action_space.action_to_str(action))
         self.info["num_actions"] += 1
