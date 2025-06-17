@@ -299,10 +299,10 @@ class GridSelector:
         return hit & ~global_mask
 
     # Create the contact functions using partial
-    contact4_1 = staticmethod(lambda grid, colour, **kwargs: GridSelector.adjacent4(grid, colour, contacts=1))
-    contact4_2 = staticmethod(lambda grid, colour, **kwargs: GridSelector.adjacent4(grid, colour, contacts=2))
-    contact4_3 = staticmethod(lambda grid, colour, **kwargs: GridSelector.adjacent4(grid, colour, contacts=3))
-    contact4_4 = staticmethod(lambda grid, colour, **kwargs: GridSelector.adjacent4(grid, colour, contacts=4))
+    contact4_1, contact4_1.__name__ = partial(adjacent4, contacts=1), "contact4_1"
+    contact4_2, contact4_2.__name__ = partial(adjacent4, contacts=2), "contact4_2"
+    contact4_3, contact4_3.__name__ = partial(adjacent4, contacts=3), "contact4_3"
+    contact4_4, contact4_4.__name__ = partial(adjacent4, contacts=4), "contact4_4"
 
     @staticmethod
     def adjacent8(grid: np.ndarray, colour: int, *,
