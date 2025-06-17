@@ -92,24 +92,21 @@ class GridSelector:
     # ─────────────────────────────────────────────── #
     @staticmethod
     def components4(grid: np.ndarray, colour: int, **__) -> np.ndarray:
-        """
-        One boolean layer *per* 4‑connected component of *colour*.
-        Shape → (num_components, H, W).
-        """
+        """Returns a 2D mask of all 4-connected components of the given color."""
         mask = GridSelector.colour(grid, colour)
         lbl, n = label(mask, structure=_FOUR_CONN)
         if n == 0:
-            return np.zeros((0, *grid.shape), dtype=bool)
-        return np.stack([(lbl == i) for i in range(1, n + 1)])
+            return np.zeros_like(grid, dtype=bool)
+        return lbl > 0  # Convert to boolean mask
 
     @staticmethod
     def components8(grid: np.ndarray, colour: int, **__) -> np.ndarray:
-        """Same as :py:meth:`components4` but with 8‑connectivity."""
+        """Returns a 2D mask of all 8-connected components of the given color."""
         mask = GridSelector.colour(grid, colour)
-        lbl, n = label(mask, structure=_EIGHT_CONN)
+        lbl, n = label(mask, structure=_EIGHT_CONN)  # Use module-level constant
         if n == 0:
-            return np.zeros((0, *grid.shape), dtype=bool)
-        return np.stack([(lbl == i) for i in range(1, n + 1)])
+            return np.zeros_like(grid, dtype=bool)
+        return lbl > 0  # Convert to boolean mask
     
     @staticmethod
     def nth_largest_shape(grid: np.ndarray, colour: int, connectivity: int, rank: int) -> np.ndarray:
@@ -196,13 +193,31 @@ class GridSelector:
     # ─────────────────────────────────────────────── #
     @staticmethod
     def outer_border4(grid: np.ndarray, colour: int, **__) -> np.ndarray:
-        comps = GridSelector.components4(grid, colour)
-        return np.array([find_boundaries(c, mode="outer") for c in comps])
+        """Returns a 2D mask of the outer border of all 4-connected components."""
+        mask = GridSelector.colour(grid, colour)
+        lbl, n = label(mask, structure=_FOUR_CONN)  # Use module-level constant
+        if n == 0:
+            return np.zeros_like(grid, dtype=bool)
+        # Get all components
+        components = np.stack([(lbl == i) for i in range(1, n + 1)])
+        # Find boundaries for each component
+        boundaries = np.array([find_boundaries(c, mode="outer") for c in components])
+        # Combine all boundaries
+        return np.any(boundaries, axis=0)
 
     @staticmethod
     def inner_border4(grid: np.ndarray, colour: int, **__) -> np.ndarray:
-        comps = GridSelector.components4(grid, colour)
-        return np.array([find_boundaries(c, mode="inner") for c in comps])
+        """Returns a 2D mask of the inner border of all 4-connected components."""
+        mask = GridSelector.colour(grid, colour)
+        lbl, n = label(mask, structure=_FOUR_CONN)  # Use module-level constant
+        if n == 0:
+            return np.zeros_like(grid, dtype=bool)
+        # Get all components
+        components = np.stack([(lbl == i) for i in range(1, n + 1)])
+        # Find boundaries for each component
+        boundaries = np.array([find_boundaries(c, mode="inner") for c in components])
+        # Combine all boundaries
+        return np.any(boundaries, axis=0)
     
     @staticmethod
     def grid_border(grid: np.ndarray, colour: int, **__) -> np.ndarray:
@@ -216,15 +231,31 @@ class GridSelector:
 
     @staticmethod
     def outer_border8(grid: np.ndarray, colour: int, **__) -> np.ndarray:
-        comps = GridSelector.components8(grid, colour)
-        return np.array([find_boundaries(c, mode="outer") for c in comps])
+        """Returns a 2D mask of the outer border of all 8-connected components."""
+        mask = GridSelector.colour(grid, colour)
+        lbl, n = label(mask, structure=_EIGHT_CONN)  # Use module-level constant
+        if n == 0:
+            return np.zeros_like(grid, dtype=bool)
+        # Get all components
+        components = np.stack([(lbl == i) for i in range(1, n + 1)])
+        # Find boundaries for each component
+        boundaries = np.array([find_boundaries(c, mode="outer") for c in components])
+        # Combine all boundaries
+        return np.any(boundaries, axis=0)
 
     @staticmethod
     def inner_border8(grid: np.ndarray, colour: int, **__) -> np.ndarray:
-        comps = GridSelector.components8(grid, colour)
-        return np.array([find_boundaries(c, mode="inner") for c in comps])
-    
-    outer_border_8, outer_border_8.__name__ = partial(outer_border8), "outer_border_8"
+        """Returns a 2D mask of the inner border of all 8-connected components."""
+        mask = GridSelector.colour(grid, colour)
+        lbl, n = label(mask, structure=_EIGHT_CONN)  # Use module-level constant
+        if n == 0:
+            return np.zeros_like(grid, dtype=bool)
+        # Get all components
+        components = np.stack([(lbl == i) for i in range(1, n + 1)])
+        # Find boundaries for each component
+        boundaries = np.array([find_boundaries(c, mode="inner") for c in components])
+        # Combine all boundaries
+        return np.any(boundaries, axis=0)
 
     grid_border, grid_border.__name__ = partial(grid_border), "grid_border"
     
@@ -233,8 +264,7 @@ class GridSelector:
     # 4  Adjacency
     # ─────────────────────────────────────────────── #
     @staticmethod
-    def adjacent4(grid: np.ndarray, colour: int, *,
-                  contacts: int = 1) -> np.ndarray:
+    def adjacent4(grid: np.ndarray, colour: int, *, contacts: int = 1) -> np.ndarray:
         """
         Cells *not* of `colour` that touch *exactly* `contacts` 4-neighbours
         *within a single connected component* of that colour.
@@ -247,30 +277,32 @@ class GridSelector:
         global_mask = GridSelector.colour(grid, colour)
 
         # 2. get each connected shape of that colour
-        comps = GridSelector.components4(grid, colour)
-        if comps.shape[0] == 0:
-            # no shapes → no adjacencies
+        mask = GridSelector.colour(grid, colour)
+        lbl, n = label(mask, structure=_FOUR_CONN)
+        if n == 0:
             return np.zeros_like(global_mask, dtype=bool)
 
         # 3. for each component, count its 4-neighbours
-        #    and check “== contacts”
-        #    comps  shape: (n_shapes, H, W)
-        #    counts shape: (n_shapes, H, W)
-        counts = np.stack([
-            convolve(comp.astype(int), _FOUR_CONN, mode="constant", cval=0)
-            for comp in comps
-        ])
+        components = np.stack([(lbl == i) for i in range(1, n + 1)])
+        counts = np.zeros_like(grid, dtype=int)
+        
+        # Count neighbors for each component
+        for comp in components:
+            # Use 2D convolution with proper axes
+            neighbor_count = convolve(comp.astype(int), _FOUR_CONN, mode='constant', cval=0)
+            counts += neighbor_count
 
-        # 4. we want cells where *any* one shape gives exactly `contacts` neighbors
-        hit = np.any(counts == contacts, axis=0)
+        # 4. we want cells where the total count equals `contacts`
+        hit = (counts == contacts)
 
         # 5. but exclude the coloured cells themselves
         return hit & ~global_mask
-    
-    contact4_1, contact4_1.__name__ = partial(adjacent4, contacts=1), "contact4_1"
-    contact4_2, contact4_2.__name__ = partial(adjacent4, contacts=2), "contact4_2"
-    contact4_3, contact4_3.__name__ = partial(adjacent4, contacts=3), "contact4_3"
-    contact4_4, contact4_4.__name__ = partial(adjacent4, contacts=4), "contact4_4"
+
+    # Create the contact functions using partial
+    contact4_1 = staticmethod(lambda grid, colour, **kwargs: GridSelector.adjacent4(grid, colour, contacts=1))
+    contact4_2 = staticmethod(lambda grid, colour, **kwargs: GridSelector.adjacent4(grid, colour, contacts=2))
+    contact4_3 = staticmethod(lambda grid, colour, **kwargs: GridSelector.adjacent4(grid, colour, contacts=3))
+    contact4_4 = staticmethod(lambda grid, colour, **kwargs: GridSelector.adjacent4(grid, colour, contacts=4))
 
     @staticmethod
     def adjacent8(grid: np.ndarray, colour: int, *,
