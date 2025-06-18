@@ -5,12 +5,16 @@ Verify every solver in `solvers/` really solves its challenge.
 import argparse
 import sys
 from pathlib import Path
+import os
 
 from solvers import SOLVERS, get_actions, list_keys, get_exclude
 
 # your existing imports
 from action_space import ARCActionSpace
 from env import ARCEnv
+
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # adjust paths
 DATA_DIR = Path(__file__).resolve().parent / "data"

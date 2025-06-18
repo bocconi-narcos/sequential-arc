@@ -37,20 +37,20 @@ SOLUTIONS_JSON  = DATA_DIR / "solutions.json"
 OUTPUT_FILEPATH = Path(__file__).resolve().parent / "replay_buffer_factorized.pkl"
 
 
-def load_and_filter_grids(solutions_data, max_h, max_w):
+def load_and_filter_grids(solutions_data, challenges_data, max_h, max_w):
     """
-    Filters grids from solutions_data based on maximum height and width.
+    Filters grids from solutions_data and challenges_data based on maximum height and width.
     Returns a list of (task_key, example_index) for valid grids.
     """
     valid_grids = []
     
-    for task_key, task_data in solutions_data.items():
-        if 'train' in task_data:
-            for i, example in enumerate(task_data['train']):
+    for task_key in challenges_data:
+        if 'train' in challenges_data[task_key]:
+            for i, example in enumerate(challenges_data[task_key]['train']):
                 try:
                     # Check both input and output dimensions
                     input_grid = np.array(example['input'])
-                    output_grid = np.array(example['output'])
+                    output_grid = np.array(solutions_data[task_key])  # Solution is directly in solutions_data
                     
                     if (input_grid.shape[0] <= max_h and input_grid.shape[1] <= max_w and
                         output_grid.shape[0] <= max_h and output_grid.shape[1] <= max_w):
@@ -60,6 +60,23 @@ def load_and_filter_grids(solutions_data, max_h, max_w):
                     continue
     
     return valid_grids
+
+def process_state(state: np.ndarray) -> np.ndarray:
+    """
+    Process a state array to ensure it's 2D. If it's 3D (from selection functions),
+    combine all layers into a single 2D array.
+    
+    Args:
+        state: Input state array (2D or 3D)
+        
+    Returns:
+        2D numpy array
+    """
+    if state.ndim == 3:
+        # If we have multiple layers (from selection functions),
+        # combine them by taking the maximum value across layers
+        return np.max(state, axis=0)
+    return state
 
 def main():
     """
@@ -128,9 +145,11 @@ def main():
         random.seed(args.seed)
         np.random.seed(args.seed)
 
-    # Load solutions data
+    # Load solutions and challenges data
     with open(args.solutions_json_path, 'r') as f:
         solutions_data = json.load(f)
+    with open(args.challenges_json_path, 'r') as f:
+        challenges_data = json.load(f)
 
     action_space = ARCActionSpace(preset=args.action_preset, mode="factorized")
     
@@ -142,7 +161,7 @@ def main():
         seed=args.seed 
     )
 
-    valid_initial_grids = load_and_filter_grids(solutions_data, args.max_grid_dim_h, args.max_grid_dim_w)
+    valid_initial_grids = load_and_filter_grids(solutions_data, challenges_data, args.max_grid_dim_h, args.max_grid_dim_w)
 
     if not valid_initial_grids:
         print(f"No initial grids found matching criteria (max_h={args.max_grid_dim_h}, max_w={args.max_grid_dim_w}). Exiting.")
@@ -158,10 +177,10 @@ def main():
     while len(replay_buffer) < args.buffer_size:
         task_key, example_index = random.choice(valid_initial_grids)
         
-        # Get the specific example from solutions data
-        example = solutions_data[task_key]['train'][example_index]
+        # Get the input from challenges and output from solutions
+        example = challenges_data[task_key]['train'][example_index]
         input_grid = np.array(example['input'])
-        output_grid = np.array(example['output'])
+        output_grid = np.array(solutions_data[task_key])  # Solution is directly in solutions_data
         
         print(f"\n=== New Task ===")
         print(f"Task key: {task_key}")
@@ -201,6 +220,8 @@ def main():
                 done = terminated or truncated
 
                 next_grid_padded = next_observation[..., 0]
+                # Process the state to handle potential 3D arrays from selection functions
+                next_grid_padded = process_state(next_grid_padded)
                 next_state_np_unpadded = unpad_grid(next_grid_padded)
 
                 # Store the transition in the replay buffer
