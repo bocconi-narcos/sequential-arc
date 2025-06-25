@@ -1,0 +1,21 @@
+# Testing specific dependencies for arc_env
+# Includes base requirements plus tools needed for running the test suite.
+# These should generally match `project.optional-dependencies.test` in pyproject.toml.
+
+-r base.txt # Core dependencies are needed for tests to run the code
+
+# Pytest framework
+pytest>=7.0
+
+# Pytest plugin for coverage measurement
+pytest-cov>=3.0
+
+# Add other testing-specific libraries here if needed, e.g.:
+# mock>=4.0 # For older Python versions if unittest.mock is not sufficient
+# hypothesis # For property-based testing
+# tox # For testing in multiple Python environments
+
+# Ensure versions align with pyproject.toml where specified.
+# The specific versions from pyproject.toml [project.optional-dependencies.test] are:
+# pytest>=7.0
+# pytest-cov>=3.0

@@ -1,0 +1,4 @@
+# This is a marker file that indicates that the `arc_env.arc_env` package
+# supports type checking and should be checked by type checkers like MyPy.
+# For more information, see PEP 561:
+# https://peps.python.org/pep-0561/

@@ -1,0 +1,16 @@
+# Core dependencies for the arc_env package
+# These should generally match the `dependencies` section in pyproject.toml
+
+gymnasium>=0.26.0
+numpy>=1.21.0
+
+# Add other core runtime dependencies here as they are identified.
+# For example, if a specific image processing library is always needed for rendering
+# or core operations (though rendering dependencies are often optional).
+# Example:
+# pygame>=2.1.0 # If pygame is a core rendering dependency
+# scikit-image # If used for core grid_utils like object detection
+
+# Note: It's good practice to pin versions more specifically for reproducible builds,
+# e.g., gymnasium==0.29.1, numpy==1.26.0, or use a lock file generator like pip-tools.
+# For a library, using minimum supported versions (>=) is common.

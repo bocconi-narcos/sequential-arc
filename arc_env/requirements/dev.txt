@@ -1,0 +1,52 @@
+# Development dependencies for arc_env
+# Includes base requirements, plus tools for linting, formatting, type checking, building, etc.
+# These should generally match `project.optional-dependencies.dev` in pyproject.toml.
+
+-r base.txt # Include core dependencies
+
+# Testing (pytest and plugins) - often also included directly in dev or via a separate test.txt
+pytest>=7.0
+pytest-cov>=3.0 # For test coverage
+
+# Type Checking
+mypy>=0.900 # Static type checker, version might need adjustment based on Python version
+
+# Linting & Formatting
+ruff>=0.1.0   # Fast linter, can replace flake8, isort, etc.
+# Alternatively, individual tools:
+# flake8>=5.0
+# pylint>=2.14 # More comprehensive but can be slower/noisier
+black>=22.0   # Code formatter
+isort>=5.0    # Import sorter (if not using ruff for this)
+
+# Build tools (already in pyproject.toml's build-system, but can be listed for dev env)
+# setuptools>=61.0
+# wheel
+# twine # For uploading to PyPI
+
+# Documentation (if using Sphinx)
+# sphinx>=5.0
+# sphinx-rtd-theme>=1.0 # ReadTheDocs theme for Sphinx
+# sphinx-autodoc-typehints # For better type hint rendering in Sphinx
+# myst-parser # If using MyST Markdown for Sphinx
+
+# Other useful dev tools:
+# pre-commit # For running checks before commits
+# ipython # Enhanced Python interpreter
+# jupyter # For notebooks (e.g., in examples or tutorials)
+
+# For this project, based on pyproject.toml:
+# pytest already listed
+# mypy already listed
+# ruff already listed
+# black already listed
+# isort already listed (though ruff can handle import sorting too)
+
+# Ensure versions align with pyproject.toml where specified.
+# The specific versions from pyproject.toml [project.optional-dependencies.dev] are:
+# pytest>=7.0
+# mypy>=0.900
+# ruff>=0.1.0
+# black>=22.0
+# isort>=5.0
+# pytest-cov>=3.0 # (This was in pyproject.toml's [test] section, good to have in dev too)

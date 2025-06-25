@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arc_env"
+version = "0.1.0" # This will ideally be synced with arc_env/version.py
+authors = [
+  { name="Your Name", email="your.email@example.com" }, # Replace with actual details
+]
+description = "A Gymnasium environment for the Abstraction and Reasoning Corpus (ARC)"
+readme = "README.md" # Assuming a README.md will be created later
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License", # Choose an appropriate license
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "gymnasium>=0.26.0", # Core dependency for gym.Env
+    "numpy>=1.21.0",     # For numerical operations, grid representations
+    # Add other core dependencies as they become clear
+    # e.g., "pygame" if rendering with pygame
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "mypy>=0.900",
+    "ruff>=0.1.0", # Or flake8, pylint
+    "black>=22.0",
+    "isort>=5.0",
+    # "sphinx", # for documentation
+    # "sphinx-rtd-theme", # for documentation
+]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=3.0", # For coverage reporting
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/arc_env" # Replace with actual URL
+"Bug Tracker" = "https://github.com/yourusername/arc_env/issues" # Replace
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["arc_env*"]
+exclude = ["arc_env.tests*", "arc_env.examples*", "arc_env.docs*", "arc_env.scripts*"]
+
+[tool.ruff]
+line-length = 88
+select = ["E", "W", "F", "I", "C", "B"] # Common flake8 codes + isort + flake8-bugbear
+ignore = []
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true # Can be set to false for stricter checks
+# specify paths if not running from root or if structure is complex
+# files = ["arc_env/"]
