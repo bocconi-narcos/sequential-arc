@@ -33,7 +33,7 @@ aspace = ARCActionSpace(preset="test", mode="factorized")
 env    = ARCEnv(path_c, path_s, action_space=aspace, seed=None)
 
 for j in range(20):
-    obs, _ = env.reset(options = {'min_examples':30})
+    obs, _ = env.reset(options = {'min_examples':2})
     for step in range(5):
         action = aspace.sample()          # random policy
         obs, r, term, trunc, info = env.step(action)

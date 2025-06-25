@@ -39,10 +39,10 @@ PRESETS: Dict[str, Preset] = {
             {"name": "most_independent_cells", "kwargs": {}},
         ],
         "selection": [
-            {"name": "colour",       "kwargs": {}},
+            {"name": "grid_border",       "kwargs": {}},
         ],
         "transform": [
-            {"name": "move_down_superfluid", "kwargs": {}},
+            {"name": "flip_vertical", "kwargs": {}},
         ],
     },
 
