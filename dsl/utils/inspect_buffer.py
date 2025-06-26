@@ -29,9 +29,13 @@ def plot_grids(state, next_state, action, action_space, idx):
     plt.show()
 
 
-def inspect_buffer(buffer_path, num=3, verbose=False, plot=False):
+def inspect_buffer(buffer_path, num=3, verbose=False, plot=False, max_colour_selection=False):
     with open(buffer_path, 'rb') as f:
         buffer = pickle.load(f)
+    if max_colour_selection:
+        max_colour = max(transition['action']['colour'] for transition in buffer)
+        print(f"Maximum colour selection in buffer: {max_colour}")
+        return
     print(f"Loaded buffer with {len(buffer)} transitions.")
     if not buffer:
         print("Buffer is empty.")
@@ -63,5 +67,6 @@ if __name__ == "__main__":
     parser.add_argument('--num', type=int, default=3, help='Number of transitions to print.')
     parser.add_argument('--verbose', action='store_true', help='Print full state/next_state arrays.')
     parser.add_argument('--plot', action='store_true', help='Plot state and next_state grids for each transition.')
+    parser.add_argument('--max-colour-selection', action='store_true', help='Print the maximum colour selection in the buffer and exit.')
     args = parser.parse_args()
-    inspect_buffer(args.buffer_path, num=args.num, verbose=args.verbose, plot=args.plot) 
+    inspect_buffer(args.buffer_path, num=args.num, verbose=args.verbose, plot=args.plot, max_colour_selection=args.max_colour_selection) 
