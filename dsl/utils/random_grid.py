@@ -10,7 +10,6 @@ from typing import Tuple
 def generate_random_grid(
     shape: Tuple[int, int],
     num_colors: int = 4,
-    rng: np.random.Generator = None
 ) -> np.ndarray:
     """
     Generate a random 2D grid with integer values in [0, num_colors-1].
@@ -24,11 +23,10 @@ def generate_random_grid(
     Returns:
         grid: np.ndarray of shape (H, W) with random integers in [0, num_colors-1].
     """
-    if rng is None:
-        rng = np.random.default_rng()
     H, W = shape
     if num_colors < 1:
         raise ValueError("num_colors must be >= 1")
     if num_colors > 10:
         raise ValueError("num_colors must be <= 10 (ARC palette constraint)")
-    return rng.integers(0, num_colors, size=(H, W), dtype=np.int8) 
+    random_grid = np.random.randint(0, num_colors, size=(H, W), dtype=np.int8)
+    return random_grid 

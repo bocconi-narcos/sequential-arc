@@ -228,21 +228,20 @@ def generate_buffer_from_random(
     buffer_size: int,
     grid_shape: tuple,
     num_colors: int,
-    rng: np.random.Generator = None,
     lambda_poisson: float = 7.0,
     canvas_size: int = 10,
 ) -> List[Dict[str, Any]]:
     """
     Generate a replay buffer from random grids and random actions, padding all grids to (canvas_size, canvas_size).
     """
-    if rng is None:
-        rng = np.random.default_rng()
+
     buffer = []
     transitions_added = 0
     while len(buffer) < buffer_size:
         # 1. Generate initial random grid
-        state = generate_random_grid(grid_shape, num_colors, rng)
-        n = rng.poisson(lambda_poisson)
+        num_colors = np.clip(np.random.poisson(3) + 2, 2, 10)
+        state = generate_random_grid(grid_shape, num_colors)
+        n = np.random.poisson(lambda_poisson)
         n = max(1, n)
         print(f"\n[Random] Starting new episode: grid_shape={grid_shape}, num_colors={num_colors}, episode_length={n}, buffer size={len(buffer)}/{buffer_size}")
         # 3. Apply n random actions to get target_state
@@ -297,11 +296,11 @@ def main():
     Supports both challenge dataset and random grid generation.
     """
     parser = argparse.ArgumentParser(description="Generate a replay buffer for ARC with factorized action space.")
-    parser.add_argument("--mode", type=str, choices=["challenge", "random"], default="challenge",
+    parser.add_argument("--mode", type=str, choices=["challenge", "random"], default="random",
                         help="Data source: 'challenge' for dataset, 'random' for random grids.")
     parser.add_argument("--output_filepath", type=str, default=str(Path(__file__).resolve().parent / "replay_buffer_factorized.pkl"),
                         help="Where to save the replay buffer.")
-    parser.add_argument("--buffer_size", type=int, default=10000, help="Max transitions in the buffer.")
+    parser.add_argument("--buffer_size", type=int, default=50000, help="Max transitions in the buffer.")
     parser.add_argument("--num_steps_per_grid", type=int, default=5, help="Number of random actions per grid (challenge mode).")
     parser.add_argument("--canvas_size", type=int, default=10, help="Canvas size for ARCEnv.")
     parser.add_argument("--seed", type=int, default=None, help="Random seed.")
@@ -372,7 +371,6 @@ def main():
             buffer_size=args.buffer_size,
             grid_shape=(args.random_grid_h, args.random_grid_w),
             num_colors=args.random_num_colors,
-            rng=rng,
             lambda_poisson=args.random_lambda_poisson,
             canvas_size=args.canvas_size,
         )
