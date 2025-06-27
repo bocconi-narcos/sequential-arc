@@ -63,10 +63,10 @@ def inspect_buffer(buffer_path, num=3, verbose=False, plot=False, max_colour_sel
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Inspect a replay buffer pickle file.")
-    parser.add_argument('--buffer_path', type=str, required=True, help='Path to the buffer pickle file.')
-    parser.add_argument('--num', type=int, default=3, help='Number of transitions to print.')
+    parser.add_argument('--buffer_path', type=str, default="/Users/filippogombac/Documents/GitHub/arc3/replay_buffer_factorized.pkl", help='Path to the buffer pickle file.')
+    parser.add_argument('--num', type=int, default=20, help='Number of transitions to print.')
     parser.add_argument('--verbose', action='store_true', help='Print full state/next_state arrays.')
-    parser.add_argument('--plot', action='store_true', help='Plot state and next_state grids for each transition.')
+    parser.add_argument('--plot', default=True, action='store_true', help='Plot state and next_state grids for each transition.')
     parser.add_argument('--max-colour-selection', action='store_true', help='Print the maximum colour selection in the buffer and exit.')
     args = parser.parse_args()
     inspect_buffer(args.buffer_path, num=args.num, verbose=args.verbose, plot=args.plot, max_colour_selection=args.max_colour_selection) 
