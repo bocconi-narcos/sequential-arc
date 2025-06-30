@@ -529,9 +529,9 @@ def save_buffer_to_hdf5(buffer: List[Dict[str, Any]], filepath: str):
             if key == 'transition_type':
                 # Use special type for variable-length strings
                 string_dt = h5py.string_dtype(encoding='utf-8')
-                f.create_dataset(key, data=np.array(data, dtype=string_dt), compression='gzip')
+                f.create_dataset(key, data=np.array(data, dtype=string_dt), compression='lzf')
             else:
-                f.create_dataset(key, data=np.array(data), compression='gzip')
+                f.create_dataset(key, data=np.array(data), compression='lzf')
 
     print(f"Successfully saved buffer with {len(buffer)} transitions to {filepath}")
 
