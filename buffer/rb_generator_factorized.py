@@ -130,6 +130,18 @@ def most_present_color_exclude_padding(grid: np.ndarray, padding_val: int = -1) 
     vals, counts = np.unique(flat_no_pad, return_counts=True)
     return int(vals[np.argmax(counts)])
 
+def least_present_color_exclude_padding(grid: np.ndarray, padding_val: int = -1) -> int:
+    """
+    Return the color value that appears least frequently in the grid, excluding the padding value.
+    If the grid is empty or only contains padding, return -1.
+    """
+    flat = grid.flatten()
+    flat_no_pad = flat[flat != padding_val]
+    if flat_no_pad.size == 0:
+        return -1
+    vals, counts = np.unique(flat_no_pad, return_counts=True)
+    return int(vals[np.argmin(counts)])
+
 
 def create_transition_dict(
     state: np.ndarray,
@@ -169,6 +181,7 @@ def create_transition_dict(
     shape = get_grid_shape(state)
     num_colors_grid = count_unique_colors_exclude_padding(state)
     most_present = most_present_color_exclude_padding(state)
+    least_present = least_present_color_exclude_padding(state)
 
     return {
         "state": state_padded,
@@ -185,6 +198,7 @@ def create_transition_dict(
         "shape": shape,
         "num_colors_grid": num_colors_grid,
         "most_present_color": most_present,
+        "least_present_color": least_present,
         "next_state": next_state_padded,
         "done": bool(done),
         "info": info.copy() if info is not None else {},
@@ -239,6 +253,7 @@ def generate_buffer_from_challenges(
                     done=done,
                     info=info,
                     canvas_size=canvas_size,
+
                 )
                 buffer.append(transition)
                 transitions_added += 1
@@ -477,7 +492,7 @@ def save_buffer_to_hdf5(buffer: List[Dict[str, Any]], filepath: str):
         'state': [], 'target_state': [], 'next_state': [], 'selection_mask': [],
         'action_colour': [], 'action_selection': [], 'action_transform': [],
         'reward': [], 'done': [], 'colour': [], 'color_in_state': [],
-        'shape_h': [], 'shape_w': [], 'num_colors_grid': [], 'most_present_color': [],
+        'shape_h': [], 'shape_w': [], 'num_colors_grid': [], 'most_present_color': [], 'least_present_color': [],
         'transition_type': [], 'step_distance_to_target': [],
     }
 
@@ -502,6 +517,7 @@ def save_buffer_to_hdf5(buffer: List[Dict[str, Any]], filepath: str):
         replay_data['shape_w'].append(shape[1])
         replay_data['num_colors_grid'].append(transition.get('num_colors_grid', -1))
         replay_data['most_present_color'].append(transition.get('most_present_color', -1))
+        replay_data['least_present_color'].append(transition.get('least_present_color', -1))
 
         info = transition.get('info', {})
         replay_data['transition_type'].append(info.get('transition_type', ''))
@@ -646,7 +662,12 @@ def main():
         assert "shape" in t and isinstance(t["shape"], (tuple, list)), "Missing or invalid 'shape' field in transition."
         assert "num_colors_grid" in t and isinstance(t["num_colors_grid"], int), "Missing or invalid 'num_colors_grid' field in transition."
         assert "most_present_color" in t and isinstance(t["most_present_color"], int), "Missing or invalid 'most_present_color' field in transition."
+        assert "least_present_color" in t and isinstance(t["least_present_color"], int), "Missing or invalid 'least_present_color' field in transition."
+
         print(f"Sample transition new fields: shape={t['shape']}, num_colors_grid={t['num_colors_grid']}, most_present_color={t['most_present_color']}")
+
+        with h5py.File(filepath, "r") as f:
+            print("Top-level keys:", list(f.keys()))
 
 if __name__ == "__main__":
     main() 
