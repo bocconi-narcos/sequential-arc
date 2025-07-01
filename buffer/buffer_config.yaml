@@ -1,7 +1,7 @@
 # Buffer generator configuration for ARC replay buffer
 
 # Data source mode: 'challenge', 'random', or 'mixed'
-mode: mixed
+mode: challenge
 
 # Output file path for the replay buffer
 output_filepath: replay_buffer_factorized.pkl
