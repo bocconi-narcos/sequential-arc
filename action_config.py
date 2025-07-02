@@ -82,7 +82,7 @@ PRESETS: Dict[str, Preset] = {
             {"name": "contact4_2", "kwargs": {}},
             {"name": "colour", "kwargs": {}},
             {"name": "independent_cells_4", "kwargs": {}},
-            {"name": "outer_border_8", "kwargs": {}},
+            #{"name": "outer_border_8", "kwargs": {}},
             {"name": "grid_border", "kwargs": {}},
         ],
         "transform": [
