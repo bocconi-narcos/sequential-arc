@@ -82,8 +82,6 @@ def create_transition_dict(
     next_state_padded               = pad_grid(next_state, (canvas_size, canvas_size))
     selection_mask                  = get_selection_mask(action_space, action, state)
     selection_mask_padded           = pad_grid(selection_mask.astype(np.int8), (canvas_size, canvas_size))
-    print(f"Selection mask padded shape: {selection_mask_padded.shape}, original shape: {selection_mask.shape}")
-    print(f'Original mask: {selection_mask}, \nPadded mask: {selection_mask_padded}')
 
     # Determine the ARC colour: output of the color selection function
     colour_fn, _, _                 = action_space.decode(action)
@@ -164,11 +162,16 @@ def generate_buffer_from_challenges(
             if len(buffer) >= buffer_size:
                 break
             action                  = action_space.sample()
+
+            action_string = action_space.action_to_str(action)
             
             next_observation, reward, terminated, truncated, _info = env.step(action)
             done                = terminated or truncated
             next_state          = unpad_grid(next_observation[..., 0])
+
+            
             info                = {"transition_type": "challenge"}
+            
             transition          = create_transition_dict(
                 state=state,
                 target_state=target_state,
@@ -323,8 +326,10 @@ def generate_buffer_mixed(
                 if len(buffer) >= buffer_size:
                     break
                 action              = action_space.sample()
-
+                
+                action_string = action_space.action_to_str(action)
                 next_observation, reward, terminated, truncated, _info = env.step(action)
+   
                 done            = terminated or truncated
                 next_state      = unpad_grid(next_observation[..., 0])
                 info            = {"transition_type": "challenge"}
@@ -363,6 +368,8 @@ def generate_buffer_mixed(
             temp_grid               = state.copy()
             for _ in range(n):
                 action              = action_space.sample()
+                action_string = action_space.action_to_str(action)
+
                 _, selection_fn, transform_fn = action_space.decode(action)
                 try:
                     selection_mask  = get_selection_mask(action_space, action, temp_grid)
