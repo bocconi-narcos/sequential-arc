@@ -77,10 +77,10 @@ def get_selection_mask(action_space: ARCActionSpace, action: Dict[str, int], gri
 
 def validate_colors(grid: np.ndarray, name: str = "grid") -> None:
     """
-    Validate that all colors in a grid are within the valid ARC range [0, 9].
+    Validate that all colors in a grid are within the valid ARC range [0, 10].
     """
-    if grid.min() < 0 or grid.max() > 9:
-        raise ValueError(f"Colors in {name} are outside valid ARC range [0, 9]. "
+    if grid.min() < 0 or grid.max() > 10:
+        raise ValueError(f"Colors in {name} are outside valid ARC range [0, 10]. "
                         f"Found range [{grid.min()}, {grid.max()}]")
 
 
