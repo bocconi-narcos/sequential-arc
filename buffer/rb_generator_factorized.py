@@ -163,7 +163,6 @@ def generate_buffer_from_challenges(
                 break
             action                  = action_space.sample()
 
-            action_string = action_space.action_to_str(action)
             
             next_observation, reward, terminated, truncated, _info = env.step(action)
             done                = terminated or truncated
@@ -327,7 +326,6 @@ def generate_buffer_mixed(
                     break
                 action              = action_space.sample()
                 
-                action_string = action_space.action_to_str(action)
                 next_observation, reward, terminated, truncated, _info = env.step(action)
    
                 done            = terminated or truncated
@@ -368,7 +366,6 @@ def generate_buffer_mixed(
             temp_grid               = state.copy()
             for _ in range(n):
                 action              = action_space.sample()
-                action_string = action_space.action_to_str(action)
 
                 _, selection_fn, transform_fn = action_space.decode(action)
                 try:
