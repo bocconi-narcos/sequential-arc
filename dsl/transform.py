@@ -77,8 +77,8 @@ def _paste(
     new_y = ys + shift_y
     new_x = xs + shift_x
 
-    print('new x: ', new_x)
-    print('new_y: ', new_y)
+    #print('new x: ', new_x)
+    #print('new_y: ', new_y)
 
     # Boundary check
     if (
@@ -466,11 +466,11 @@ class GridTransformer:  # noqa: WPS110
                 (np.ptp(sel_cols) + 1) if direction in {"left", "right"}
                 else (np.ptp(sel_rows) + 1)
             )
-            print('sel_mask: ', _sel_mask)
-            print('sel_rows: ', sel_rows)
-            print('sel_cols: ', sel_cols)
-            print('sel_vals: ', sel_vals)
-            print('step_len: ', step_len)
+            #print('sel_mask: ', _sel_mask)
+            #print('sel_rows: ', sel_rows)
+            #print('sel_cols: ', sel_cols)
+            #print('sel_vals: ', sel_vals)
+            #print('step_len: ', step_len)
 
             if continuous:  # ───────── tile repeatedly ─────────
                 step_idx = 1
@@ -784,7 +784,7 @@ class GridTransformer:  # noqa: WPS110
             )
             if mode == "cut" and fluid:
                 step_len = 1
-            print('step_len: ', step_len)
+            #print('step_len: ', step_len)
 
             if continuous:  # ───────── tile repeatedly ─────────
                 step_idx = 1
@@ -817,50 +817,50 @@ class GridTransformer:  # noqa: WPS110
                 offset = 0
                 while True:
                     trial_off = offset + 1
-                    print('trial_off: ', trial_off)
+                    #print('trial_off: ', trial_off)
                     r_off = trial_off * drow
-                    print('r_off: ', r_off)
+                    #print('r_off: ', r_off)
                     c_off = trial_off * dcol
-                    print('c_off: ', c_off)
+                    #print('c_off: ', c_off)
                     dest_rows = sel_rows + r_off
                     dest_cols = sel_cols + c_off
-                    print('dest_rows: ', dest_rows)
-                    print('dest_cols: ', dest_cols)
+                    #print('dest_rows: ', dest_rows)
+                    #print('dest_cols: ', dest_cols)
 
                     if not in_bounds(dest_rows, dest_cols).all():
-                        print('would clip')
+                        #print('would clip')
                         break  # would clip
                     if blocked(dest_rows, dest_cols, _sel_mask).any():
-                        print('Blocked:', blocked)
-                        print('blocked destination: ', blocked(dest_rows, dest_cols, _sel_mask))
-                        print('obstacle ahead')
+                        #print('Blocked:', blocked)
+                        #print('blocked destination: ', blocked(dest_rows, dest_cols, _sel_mask))
+                        #print('obstacle ahead')
                         break  # obstacle ahead
                     offset = trial_off
-                    print('offset: ', offset)
+                    #print('offset: ', offset)
 
                 if offset > 0:
                     r_off = offset * drow
                     c_off = offset * dcol
-                    print('r_off: ', r_off)
-                    print('c_off: ', c_off)
+                    #print('r_off: ', r_off)
+                    #print('c_off: ', c_off)
                     dest_rows = sel_rows + r_off
-                    print('dest_rows: ', dest_rows)
+                    #print('dest_rows: ', dest_rows)
                     dest_cols = sel_cols + c_off
-                    print('dest_cols: ', dest_cols)
-                    print('sel_vals: ', sel_vals)
+                    #print('dest_cols: ', dest_cols)
+                    #print('sel_vals: ', sel_vals)
                     _grid[dest_rows, dest_cols] = sel_vals
-                    print('grid: ', _grid)
+                    #print('grid: ', _grid)
                     _visited_global[dest_rows, dest_cols] = True
                     _visited_this_round = np.zeros_like(_sel_mask, bool)
                     _visited_this_round[dest_rows, dest_cols] = True
-                    print('visited_global: ', _visited_global)
+                    #print('visited_global: ', _visited_global)
 
                     if mode == "cut":
-                        print('mode == cut')
-                        print('sel_mask: ', _sel_mask)
-                        print('visited_global: ', _visited_this_round)
+                        #print('mode == cut')
+                        #print('sel_mask: ', _sel_mask)
+                        #print('visited_global: ', _visited_this_round)
                         _delete_mask = _sel_mask & ~_visited_this_round
-                        print('delete_mask: ', _delete_mask)
+                        #print('delete_mask: ', _delete_mask)
                         _grid[_delete_mask] = _background_color
 
         # ──────────────────── main body ───────────────────────
@@ -872,21 +872,21 @@ class GridTransformer:  # noqa: WPS110
             _slide_core(out, selection)
         else:
             if direction in {"up", "down"}:   # treat each *column* independently
-                print('np.flatnonzero(selection.any(axis=0)): ', np.flatnonzero(selection.any(axis=0)))
+                #print('np.flatnonzero(selection.any(axis=0)): ', np.flatnonzero(selection.any(axis=0)))
                 for col_idx in np.flatnonzero(selection.any(axis=0)):
-                    print('col_idx: ', col_idx)
+                    #print('col_idx: ', col_idx)
                     sub_mask = selection & (np.arange(grid.shape[1]) == col_idx)
                     if superfluid:
                         sub_masks = find_sub_masks(sub_mask, 1)
-                        print('sub_mask: ', sub_mask)
-                        print('sub_masks: ', sub_masks)
+                        #print('sub_mask: ', sub_mask)
+                        #print('sub_masks: ', sub_masks)
                         for sub_mask in sub_masks:
-                            print('visited_global & np.arange(grid.shape[1]) == col_idx: ', _visited_global & (np.arange(grid.shape[1]) == col_idx))
+                            #print('visited_global & np.arange(grid.shape[1]) == col_idx: ', _visited_global & (np.arange(grid.shape[1]) == col_idx))
                             connected_sub_mask = sub_mask | _visited_global & (np.arange(grid.shape[1]) == col_idx)
-                            print('connected_sub_mask: ', connected_sub_mask)
+                            #print('connected_sub_mask: ', connected_sub_mask)
                             _slide_core(out, connected_sub_mask)
-                            print('out: \n', out)
-                            print('')
+                            #print('out: \n', out)
+                            #print('')
                     else:
                         _slide_core(out, sub_mask)
             else:                               # left / right ⇒ independent rows
