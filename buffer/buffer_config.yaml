@@ -1,16 +1,16 @@
 # Buffer generator configuration for ARC replay buffer
 
 # Data source mode: 'challenge', 'random', or 'mixed'
-mode: mixed
+mode: random
 
 # Output file path for the replay buffer
 output_filepath: replay_buffer_factorized.pkl
 
 # Maximum number of transitions in the buffer
-buffer_size: 50000
+buffer_size: 500000
 
 # Number of random actions per grid (challenge mode)
-num_steps_per_grid: 5
+num_steps_per_grid: 1
 
 # Canvas size for ARCEnv
 canvas_size: 10

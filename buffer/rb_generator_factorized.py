@@ -495,7 +495,7 @@ def main():
     # Set defaults for any missing fields (should match buffer_config.yaml)
     defaults                        = {
         'mode': 'mixed',
-        'buffer_size': 200000,
+        'buffer_size': 500000,
         'num_steps_per_grid': 5,
         'canvas_size': 10,
         'seed': None,
