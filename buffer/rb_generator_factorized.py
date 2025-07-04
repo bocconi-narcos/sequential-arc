@@ -223,13 +223,15 @@ def generate_buffer_from_random(
         # Reset environment to get a clean state
         obs, info                   = env.reset()
 
-        # 3. Apply n random actions to get target_state
+        # 2. Generate the sequence of actions that will lead to the target state
+        action_sequence             = []
         temp_grid                   = state.copy()
         
         for _ in range(n):
-            action                        = action_space.sample()
-            _, selection_fn, transform_fn = action_space.decode(action)
+            action                  = action_space.sample()
+            action_sequence.append(action)
             try:
+                _, selection_fn, transform_fn = action_space.decode(action)
                 selection_mask      = get_selection_mask(action_space, action, temp_grid)
                 temp_grid           = transform_fn(temp_grid, selection_mask)
             except Exception:
@@ -237,20 +239,25 @@ def generate_buffer_from_random(
         
         target_state                = temp_grid.copy()
         
-        # 4. Roll out the episode, storing transitions
+        # 3. Roll out the episode using the exact same action sequence, storing transitions
         current_grid                = state.copy()
+        action_idx                  = 0
         for step in range(n):
-            if len(buffer) >= buffer_size:
+            if len(buffer) >= buffer_size or action_idx >= len(action_sequence):
                 break
-            action                        = action_space.sample()
-            _, selection_fn, transform_fn = action_space.decode(action)
+            
+            # Use the pre-generated action from the sequence
+            action                  = action_sequence[action_idx]
+            action_idx              += 1
             
             try:
                 next_observation, reward, terminated, truncated, _info = env.step(action)
                 selection_mask      = get_selection_mask(action_space, action, current_grid)
                 next_state          = unpad_grid(next_observation[..., 0])
                 done                = (step == n - 1)
-                info                = {"step_distance_to_target": n - step - 1, "transition_type": "random"}
+                # Correct step_distance_to_target: 1 for last step, 2 for penultimate, etc.
+                step_distance       = n - step
+                info                = {"step_distance_to_target": step_distance, "transition_type": "random"}
                 
                 transition          = create_transition_dict(
                     state=current_grid,
@@ -290,17 +297,21 @@ def generate_buffer_mixed(
     grid_shape: tuple,
     num_colors: int,
     lambda_poisson: float = 7.0,
+    skip_no_change_steps: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Generate a replay buffer from a mix of random grids and actual ARC challenges and random actions, padding all grids to (canvas_size, canvas_size).
+    
+    Args:
+        skip_no_change_steps: If True, steps that don't change the state don't count towards num_steps_per_grid
     """
 
     buffer                          = []
     transitions_added               = 0
     
     while len(buffer) < buffer_size:
-        # Randomly choose between challenge and random (50/50)
-        use_challenge               = random.random() < 0.5
+        # Randomly choose between challenge and random (3/97)
+        use_challenge               = random.random() < 0.03
         if use_challenge:
             # --- Challenge episode (like generate_buffer_from_challenges) ---
             task_key, example_index = random.choice(valid_initial_grids)
@@ -321,7 +332,8 @@ def generate_buffer_mixed(
             state                   = unpad_grid(obs[..., 0])
             target_state            = unpad_grid(obs[..., 1])
             
-            for step in range(num_steps_per_grid):
+            step                    = 0
+            while step < num_steps_per_grid:
                 if len(buffer) >= buffer_size:
                     break
                 action              = action_space.sample()
@@ -330,6 +342,10 @@ def generate_buffer_mixed(
    
                 done            = terminated or truncated
                 next_state      = unpad_grid(next_observation[..., 0])
+                
+                # Check if state changed when skip_no_change_steps is enabled
+                state_changed = not np.array_equal(state, next_state)
+                
                 info            = {"transition_type": "challenge"}
                 transition      = create_transition_dict(
                     state=state,
@@ -348,6 +364,11 @@ def generate_buffer_mixed(
                 if transitions_added % 10 == 0 or transitions_added == buffer_size:
                     print(f"[Challenge] Added {transitions_added}/{buffer_size} transitions to buffer.")
                 state = next_state.copy()
+                
+                # Only increment step counter if state changed or if skip_no_change_steps is False
+                if state_changed or not skip_no_change_steps:
+                    step += 1
+                
                 if done:
                     break
 
@@ -362,49 +383,71 @@ def generate_buffer_mixed(
             print(f"\n[Random] Starting new episode: grid_shape={grid_shape}, num_colors={num_colors}, episode_length={n}, buffer size={len(buffer)}/{buffer_size}")
             # Reset environment to get a clean state
             obs, info               = env.reset()
-            # 3. Apply n random actions to get target_state
+            
+            # 2. Generate the sequence of actions that will lead to the target state
+            action_sequence         = []
             temp_grid               = state.copy()
             for _ in range(n):
                 action              = action_space.sample()
-
-                _, selection_fn, transform_fn = action_space.decode(action)
+                action_sequence.append(action)
                 try:
+                    _, selection_fn, transform_fn = action_space.decode(action)
                     selection_mask  = get_selection_mask(action_space, action, temp_grid)
                     temp_grid       = transform_fn(temp_grid, selection_mask)
                 except Exception:
+                    # If action fails, just continue with current grid
                     continue
+
             target_state            = temp_grid.copy()
             
-            # 4. Roll out the episode, storing transitions
+            # 3. Roll out the episode using the exact same action sequence, storing transitions
             current_grid            = state.copy()
-            for step in range(n):
+            action_idx              = 0
+            step                    = 0
+            while step < n and action_idx < len(action_sequence):
                 if len(buffer) >= buffer_size:
                     break
-                action              = action_space.sample()
-                _, selection_fn, transform_fn = action_space.decode(action)
-
-                next_observation, reward, terminated, truncated, _info = env.step(action)
-                selection_mask  = get_selection_mask(action_space, action, current_grid)
-                next_state      = unpad_grid(next_observation[..., 0])
-                done            = (step == n - 1)
-                info            = {"step_distance_to_target": n - step - 1, "transition_type": "random"}
-                transition      = create_transition_dict(
-                    state=current_grid,
-                    target_state=target_state,
-                    action=action,
-                    action_space=action_space,
-                    reward=reward,
-                    next_state=next_state,
-                    done=done,
-                    info=info,
-                    canvas_size=canvas_size,
-                )
-                buffer.append(transition)
-                transitions_added += 1
                 
-                if transitions_added % 10 == 0 or transitions_added == buffer_size:
-                    print(f"[Random] Added {transitions_added}/{buffer_size} transitions to buffer.")
-                current_grid = next_state.copy()
+                # Use the pre-generated action from the sequence
+                action              = action_sequence[action_idx]
+                action_idx          += 1
+                
+                try:
+                    next_observation, reward, terminated, truncated, _info = env.step(action)
+                    selection_mask  = get_selection_mask(action_space, action, current_grid)
+                    next_state      = unpad_grid(next_observation[..., 0])
+                    
+                    # Check if state changed when skip_no_change_steps is enabled
+                    state_changed = not np.array_equal(current_grid, next_state)
+                    
+                    done            = (step == n - 1)
+                    # Correct step_distance_to_target: 1 for last step, 2 for penultimate, etc.
+                    step_distance   = n - step
+                    info            = {"step_distance_to_target": step_distance, "transition_type": "random"}
+                    transition      = create_transition_dict(
+                        state=current_grid,
+                        target_state=target_state,
+                        action=action,
+                        action_space=action_space,
+                        reward=reward,
+                        next_state=next_state,
+                        done=done,
+                        info=info,
+                        canvas_size=canvas_size,
+                    )
+                    buffer.append(transition)
+                    transitions_added += 1
+                    
+                    if transitions_added % 10 == 0 or transitions_added == buffer_size:
+                        print(f"[Random] Added {transitions_added}/{buffer_size} transitions to buffer.")
+                    current_grid = next_state.copy()
+                    
+                    # Only increment step counter if state changed or if skip_no_change_steps is False
+                    if state_changed or not skip_no_change_steps:
+                        step += 1
+                except Exception:
+                    # If action fails, skip it and continue
+                    continue
 
     print(f"[Mixed] Buffer generation complete. Total transitions: {len(buffer)}")
     return buffer
@@ -478,9 +521,9 @@ def save_buffer_to_hdf5(buffer: List[Dict[str, Any]], filepath: str):
             if key == 'transition_type':
                 # Use special type for variable-length strings
                 string_dt = h5py.string_dtype(encoding='utf-8')
-                f.create_dataset(key, data=np.array(data, dtype=string_dt), compression='lzf')
+                f.create_dataset(key, data=np.array(data, dtype=string_dt))
             else:
-                f.create_dataset(key, data=np.array(data), compression='lzf')
+                f.create_dataset(key, data=np.array(data))
 
     print(f"Successfully saved buffer with {len(buffer)} transitions to {filepath}")
 
@@ -508,6 +551,7 @@ def main():
         'random_grid_w': 5,
         'random_num_colors': 4,
         'random_lambda_poisson': 7.0,
+        'skip_no_change_steps': True,
     }
     
     for k, v in defaults.items():
@@ -596,6 +640,7 @@ def main():
             num_colors=config['random_num_colors'],
             lambda_poisson=config['random_lambda_poisson'],
             canvas_size=config['canvas_size'],
+            skip_no_change_steps=config['skip_no_change_steps'],
         )
     else:
         raise ValueError(f"Invalid mode: {config['mode']}")
