@@ -33,7 +33,7 @@ from dsl.utils.background import find_background_colour
 from dsl.utils.random_grid import generate_random_grid
 
 from buffer.utils import (load_and_filter_grids, process_state, count_unique_colors,
-                   get_selection_mask, validate_colors, count_unique_colors_exclude_padding, 
+                   validate_colors, count_unique_colors_exclude_padding, 
                      most_present_color_exclude_padding, least_present_color_exclude_padding, get_grid_shape,
                      validate_grid_padding)
 
@@ -80,12 +80,6 @@ def create_transition_dict(
     state_padded                    = pad_grid(state, (canvas_size, canvas_size))
     target_state_padded             = pad_grid(target_state, (canvas_size, canvas_size))
     next_state_padded               = pad_grid(next_state, (canvas_size, canvas_size))
-    selection_mask                  = get_selection_mask(action_space, action, state)
-    selection_mask_padded           = pad_grid(selection_mask.astype(np.int8), (canvas_size, canvas_size))
-
-    # Determine the ARC colour: output of the color selection function
-    colour_fn, _, _                 = action_space.decode(action)
-    arc_colour                      = colour_fn(state)
 
     # Compute new fields from the unpadded state
     shape                           = get_grid_shape(state)
@@ -107,9 +101,6 @@ def create_transition_dict(
         "state": state_padded,
         "target_state": target_state_padded,
         "action": int(action),
-        
-        "colour": int(arc_colour),
-        "selection_mask": selection_mask_padded,
         "reward": float(reward),
         "shape": shape,
         "shape_target": shape_target,
@@ -248,7 +239,7 @@ def generate_buffer_from_random(
             action_sequence.append(action)
             try:
                 _, selection_fn, transform_fn = action_space.decode(action)
-                selection_mask      = get_selection_mask(action_space, action, temp_grid)
+                selection_mask      = selection_fn(temp_grid)
                 temp_grid           = transform_fn(temp_grid, selection_mask)
             except Exception:
                 continue
@@ -268,7 +259,6 @@ def generate_buffer_from_random(
             
             try:
                 next_observation, reward, terminated, truncated, _info = env.step(action)
-                selection_mask      = get_selection_mask(action_space, action, current_grid)
                 next_state          = unpad_grid(next_observation[..., 0])
                 done                = (step == n - 1)
                 # Correct step_distance_to_target: 1 for last step, 2 for penultimate, etc.
@@ -414,7 +404,7 @@ def generate_buffer_mixed(
                 action_sequence.append(action)
                 try:
                     _, selection_fn, transform_fn = action_space.decode(action)
-                    selection_mask  = get_selection_mask(action_space, action, temp_grid)
+                    selection_mask  = selection_fn(temp_grid)
                     temp_grid       = transform_fn(temp_grid, selection_mask)
                 except Exception:
                     # If action fails, just continue with current grid
@@ -436,7 +426,6 @@ def generate_buffer_mixed(
                 
                 try:
                     next_observation, reward, terminated, truncated, _info = env.step(action)
-                    selection_mask  = get_selection_mask(action_space, action, current_grid)
                     next_state      = unpad_grid(next_observation[..., 0])
                     
                     # Check if state changed when skip_no_change_steps is enabled
@@ -503,9 +492,9 @@ def save_buffer_to_pt(buffer: List[Dict[str, Any]], filepath: str):
     
     # Initialize a dictionary to hold columns of data
     replay_data = {
-        'state': [], 'target_state': [], 'next_state': [], 'selection_mask': [],
+        'state': [], 'target_state': [], 'next_state': [],
         'action': [],
-        'reward': [], 'done': [], 'colour': [], 
+        'reward': [], 'done': [], 
         'shape_h': [], 'shape_w': [], 'num_colors_grid': [], 'most_present_color': [], 'least_present_color': [],
         'shape_h_target': [], 'shape_w_target': [], 'shape_h_next': [], 'shape_w_next': [],
         'num_colors_grid_target': [], 'most_present_color_target': [], 'least_present_color_target': [],
@@ -517,13 +506,11 @@ def save_buffer_to_pt(buffer: List[Dict[str, Any]], filepath: str):
         replay_data['state'].append(transition['state'])
         replay_data['target_state'].append(transition['target_state'])
         replay_data['next_state'].append(transition['next_state'])
-        replay_data['selection_mask'].append(transition['selection_mask'])
         
         replay_data['action'].append(transition['action'])
         
         replay_data['reward'].append(transition['reward'])
         replay_data['done'].append(transition['done'])
-        replay_data['colour'].append(transition['colour'])
 
         shape = transition.get('shape', (0, 0))
         replay_data['shape_h'].append(shape[0])
