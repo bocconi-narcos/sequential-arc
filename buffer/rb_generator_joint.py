@@ -20,7 +20,7 @@ CHALLENGES_JSON = DATA_DIR / "challenges.json"
 SOLUTIONS_JSON  = DATA_DIR / "solutions.json"
 
 # For the replay buffer, locally
-OUTPUT_FILEPATH = Path(__file__).resolve().parent / "replay_buffer_factorized.pkl"
+OUTPUT_FILEPATH = Path(__file__).resolve().parent / "replay_buffer_combinatorial.pkl"
 
 # Add project root to Python path for imports
 import sys
@@ -43,7 +43,7 @@ from buffer.utils import (load_and_filter_grids, process_state, count_unique_col
 def create_transition_dict(
     state: np.ndarray,
     target_state: np.ndarray,
-    action: Dict[str, int],
+    action: int,
     action_space: ARCActionSpace,
     reward: float,
     next_state: np.ndarray,
@@ -106,11 +106,7 @@ def create_transition_dict(
     transition = {
         "state": state_padded,
         "target_state": target_state_padded,
-        "action": {
-            "colour": action["colour"],
-            "selection": action["selection"],
-            "transform": action["transform"],
-        },
+        "action": int(action),
         
         "colour": int(arc_colour),
         "selection_mask": selection_mask_padded,
@@ -478,7 +474,7 @@ def generate_buffer_mixed(
     print(f"[Mixed] Buffer generation complete. Total transitions: {len(buffer)}")
     return buffer
 
-def load_config(config_path: str = "buffer/factorized_buffer_config.yaml") -> dict:
+def load_config(config_path: str = "buffer/joint_buffer_config.yaml") -> dict:
     """
     Load YAML config for buffer generation. Raises clear error if missing or malformed.
     """
@@ -508,7 +504,7 @@ def save_buffer_to_pt(buffer: List[Dict[str, Any]], filepath: str):
     # Initialize a dictionary to hold columns of data
     replay_data = {
         'state': [], 'target_state': [], 'next_state': [], 'selection_mask': [],
-        'action_colour': [], 'action_selection': [], 'action_transform': [],
+        'action': [],
         'reward': [], 'done': [], 'colour': [], 
         'shape_h': [], 'shape_w': [], 'num_colors_grid': [], 'most_present_color': [], 'least_present_color': [],
         'shape_h_target': [], 'shape_w_target': [], 'shape_h_next': [], 'shape_w_next': [],
@@ -523,9 +519,7 @@ def save_buffer_to_pt(buffer: List[Dict[str, Any]], filepath: str):
         replay_data['next_state'].append(transition['next_state'])
         replay_data['selection_mask'].append(transition['selection_mask'])
         
-        replay_data['action_colour'].append(transition['action']['colour'])
-        replay_data['action_selection'].append(transition['action']['selection'])
-        replay_data['action_transform'].append(transition['action']['transform'])
+        replay_data['action'].append(transition['action'])
         
         replay_data['reward'].append(transition['reward'])
         replay_data['done'].append(transition['done'])
@@ -606,7 +600,7 @@ def main():
         random.seed(None)
         np.random.seed(None)
 
-    action_space = ARCActionSpace(preset=config['action_preset'], mode="factorized")
+    action_space = ARCActionSpace(preset=config['action_preset'], mode="joint")
     env                             = ARCEnv(
         challenges_json=config['challenges_json_path'],
         solutions_json=config['solutions_json_path'],
@@ -688,7 +682,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Construct dynamic filename
-    filename = f"rb_{config['mode']}{config['buffer_size']}{config['canvas_size']}_{config['action_preset']}.pt"
+    filename = f"rb_{config['mode']}_joint_{config['buffer_size']}{config['canvas_size']}_{config['action_preset']}.pt"
     filepath = output_dir / filename
     
     # Save the buffer to PyTorch format
