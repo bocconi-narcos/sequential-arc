@@ -7,7 +7,7 @@ from collections import deque
 from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
 import yaml
-import h5py
+import torch
 
 from env import ARCEnv
 from action_space import ARCActionSpace
@@ -155,3 +155,15 @@ def validate_grid_padding(padded_grid: np.ndarray, original_shape: tuple, canvas
         bottom_padding = padded_grid[orig_h:, :]
         if not np.all(bottom_padding == -1):
             raise AssertionError(f"Bottom padding of {grid_name} contains non-(-1) values")
+
+def load_buffer_from_pt(filepath: str) -> Dict[str, Any]:
+    """
+    Load replay buffer data from a PyTorch .pt file.
+    
+    Args:
+        filepath: Path to the .pt file
+        
+    Returns:
+        Dictionary containing the buffer data with torch tensors
+    """
+    return torch.load(filepath)

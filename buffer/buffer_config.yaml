@@ -1,7 +1,7 @@
 # Buffer generator configuration for ARC replay buffer
 
 # Data source mode: 'challenge', 'random', or 'mixed'
-mode: random
+mode: mixed
 
 # Output file path for the replay buffer
 output_filepath: replay_buffer_factorized.pkl
@@ -10,7 +10,7 @@ output_filepath: replay_buffer_factorized.pkl
 buffer_size: 500000
 
 # Number of random actions per grid (challenge mode)
-num_steps_per_grid: 1
+num_steps_per_grid: 4
 
 # Canvas size for ARCEnv
 canvas_size: 10
@@ -28,7 +28,7 @@ max_grid_dim_h: 5  # Max height for initial grids (challenge mode)
 max_grid_dim_w: 5  # Max width for initial grids (challenge mode)
 
 # Random mode settings
-random_grid_h: 5  # Height of random grid (random mode)
-random_grid_w: 5  # Width of random grid (random mode)
+random_grid_h_lambda: 5  # Height of random grid (random mode)
+random_grid_w_lambda: 5  # Width of random grid (random mode)
 random_num_colors: 4  # Number of colors for random grid (random mode)
 random_lambda_poisson: 7.0  # Lambda for Poisson episode length (random mode) 

@@ -11,7 +11,7 @@ from collections import deque
 from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
 import yaml
-import h5py
+import torch
 
 # adjust paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -93,22 +93,42 @@ def create_transition_dict(
     most_present                    = most_present_color_exclude_padding(state)
     least_present                   = least_present_color_exclude_padding(state)
 
+    shape_next                     = get_grid_shape(next_state)
+    num_colors_grid_next           = count_unique_colors_exclude_padding(next_state)
+    most_present_next              = most_present_color_exclude_padding(next_state)
+    least_present_next             = least_present_color_exclude_padding(next_state)
+
+    shape_target                   = get_grid_shape(target_state)
+    num_colors_grid_target         = count_unique_colors_exclude_padding(target_state)
+    most_present_target            = most_present_color_exclude_padding(target_state)
+    least_present_target           = least_present_color_exclude_padding(target_state)
+
     transition = {
         "state": state_padded,
         "target_state": target_state_padded,
-        "color_in_state": count_unique_colors(state),
         "action": {
             "colour": action["colour"],
             "selection": action["selection"],
             "transform": action["transform"],
         },
+        
         "colour": int(arc_colour),
         "selection_mask": selection_mask_padded,
         "reward": float(reward),
         "shape": shape,
+        "shape_target": shape_target,
+        "shape_next": shape_next,
+        
         "num_colors_grid": num_colors_grid,
         "most_present_color": most_present,
         "least_present_color": least_present,
+        "num_colors_grid_target": num_colors_grid_target,
+        "most_present_color_target": most_present_target,
+        "least_present_color_target": least_present_target,
+        "num_colors_grid_next": num_colors_grid_next,
+        "most_present_color_next": most_present_next,
+        "least_present_color_next": least_present_next,
+
         "next_state": next_state_padded,
         "done": bool(done),
         "info": info.copy() if info is not None else {},
@@ -294,7 +314,7 @@ def generate_buffer_mixed(
     buffer_size: int,
     num_steps_per_grid: int,
     canvas_size: int,
-    grid_shape: tuple,
+    grid_shape_lambda: tuple,
     num_colors: int,
     lambda_poisson: float = 7.0,
     skip_no_change_steps: bool = False,
@@ -308,6 +328,8 @@ def generate_buffer_mixed(
 
     buffer                          = []
     transitions_added               = 0
+    row_lambda                  = grid_shape_lambda[0]
+    col_lambda                  = grid_shape_lambda[1]
     
     while len(buffer) < buffer_size:
         # Randomly choose between challenge and random (3/97)
@@ -376,6 +398,10 @@ def generate_buffer_mixed(
         else:
             # --- Random episode (like generate_buffer_from_random) ---
             # 1. Generate initial random grid
+            num_rows                = np.clip(np.random.poisson(row_lambda) + 2, 2, 10)
+            num_cols                = np.clip(np.random.poisson(col_lambda) + 2, 2, 10)
+            grid_shape              = (num_rows, num_cols)
+
             num_colors              = np.clip(np.random.poisson(3) + 2, 2, 10)
             state                   = generate_random_grid(grid_shape, num_colors)
             n                       = np.random.poisson(lambda_poisson)
@@ -467,25 +493,27 @@ def load_config(config_path: str = "buffer/buffer_config.yaml") -> dict:
         raise ValueError(f"Config file {config_path} is not a valid YAML mapping.")
     return config
 
-def save_buffer_to_hdf5(buffer: List[Dict[str, Any]], filepath: str):
+def save_buffer_to_pt(buffer: List[Dict[str, Any]], filepath: str):
     """
-    Saves the replay buffer to an HDF5 file.
-    The buffer (a list of dicts) is converted into a dictionary of numpy arrays
+    Saves the replay buffer to a PyTorch .pt file.
+    The buffer (a list of dicts) is converted into a dictionary of torch tensors
     for efficient storage.
     """
     if not buffer:
-        print("Warning: Buffer is empty, not saving to HDF5.")
+        print("Warning: Buffer is empty, not saving to PT.")
         return
 
-    print(f"Preparing to save buffer to HDF5 at {filepath}...")
+    print(f"Preparing to save buffer to PT at {filepath}...")
     
     # Initialize a dictionary to hold columns of data
     replay_data = {
         'state': [], 'target_state': [], 'next_state': [], 'selection_mask': [],
         'action_colour': [], 'action_selection': [], 'action_transform': [],
-        'reward': [], 'done': [], 'colour': [], 'color_in_state': [],
+        'reward': [], 'done': [], 'colour': [], 
         'shape_h': [], 'shape_w': [], 'num_colors_grid': [], 'most_present_color': [], 'least_present_color': [],
-        'transition_type': [], 'step_distance_to_target': [],
+        'shape_h_target': [], 'shape_w_target': [], 'shape_h_next': [], 'shape_w_next': [],
+        'num_colors_grid_target': [], 'most_present_color_target': [], 'least_present_color_target': [],
+        'transition_type': [], 'step_distance_to_target': [], 'num_colors_grid_next': [], 'most_present_color_next': [], 'least_present_color_next': [],
     }
 
     # Populate the dictionary from the buffer
@@ -502,29 +530,38 @@ def save_buffer_to_hdf5(buffer: List[Dict[str, Any]], filepath: str):
         replay_data['reward'].append(transition['reward'])
         replay_data['done'].append(transition['done'])
         replay_data['colour'].append(transition['colour'])
-        replay_data['color_in_state'].append(transition['color_in_state'])
 
         shape = transition.get('shape', (0, 0))
         replay_data['shape_h'].append(shape[0])
+        replay_data['shape_h_target'].append(transition.get('shape_target', (0, 0))[0])
+        replay_data['shape_h_next'].append(transition.get('shape_next', (0, 0))[0])
         replay_data['shape_w'].append(shape[1])
-        replay_data['num_colors_grid'].append(transition.get('num_colors_grid', -1))
-        replay_data['most_present_color'].append(transition.get('most_present_color', -1))
-        replay_data['least_present_color'].append(transition.get('least_present_color', -1))
+        replay_data['shape_w_target'].append(transition.get('shape_target', (0, 0))[1])
+        replay_data['shape_w_next'].append(transition.get('shape_next', (0, 0))[1])
+        replay_data['num_colors_grid'].append(transition.get('num_colors_grid'))
+        replay_data['num_colors_grid_target'].append(transition.get('num_colors_grid_target'))
+        replay_data['num_colors_grid_next'].append(transition.get('num_colors_grid_next'))
+        replay_data['most_present_color'].append(transition.get('most_present_color'))
+        replay_data['most_present_color_target'].append(transition.get('most_present_color_target'))
+        replay_data['most_present_color_next'].append(transition.get('most_present_color_next'))
+        replay_data['least_present_color'].append(transition.get('least_present_color'))
+        replay_data['least_present_color_target'].append(transition.get('least_present_color_target'))
+        replay_data['least_present_color_next'].append(transition.get('least_present_color_next'))
 
         info = transition.get('info', {})
         replay_data['transition_type'].append(info.get('transition_type', ''))
         replay_data['step_distance_to_target'].append(info.get('step_distance_to_target', -1))
 
-    # Save to HDF5
-    with h5py.File(filepath, 'w') as f:
-        for key, data in replay_data.items():
-            if key == 'transition_type':
-                # Use special type for variable-length strings
-                string_dt = h5py.string_dtype(encoding='utf-8')
-                f.create_dataset(key, data=np.array(data, dtype=string_dt))
-            else:
-                f.create_dataset(key, data=np.array(data))
+    # Convert to torch tensors and save
+    tensor_data = {}
+    for key, data in replay_data.items():
+        if key == 'transition_type':
+            # Keep strings as list (torch doesn't handle strings well in tensors)
+            tensor_data[key] = data
+        else:
+            tensor_data[key] = torch.tensor(np.array(data))
 
+    torch.save(tensor_data, filepath)
     print(f"Successfully saved buffer with {len(buffer)} transitions to {filepath}")
 
 
@@ -611,7 +648,7 @@ def main():
             env=env,
             action_space=action_space,
             buffer_size=config['buffer_size'],
-            grid_shape=(config['random_grid_h'], config['random_grid_w']),
+            grid_shape=(config['random_grid_h_lambda'], config['random_grid_w_lambda']),
             num_colors=config['random_num_colors'],
             lambda_poisson=config['random_lambda_poisson'],
             canvas_size=config['canvas_size'],
@@ -636,7 +673,7 @@ def main():
             num_steps_per_grid=config['num_steps_per_grid'],
             action_space=action_space,
             buffer_size=config['buffer_size'],
-            grid_shape=(config['random_grid_h'], config['random_grid_w']),
+            grid_shape_lambda=(config['random_grid_h'], config['random_grid_w']),
             num_colors=config['random_num_colors'],
             lambda_poisson=config['random_lambda_poisson'],
             canvas_size=config['canvas_size'],
@@ -651,11 +688,11 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Construct dynamic filename
-    filename = f"rb_{config['mode']}{config['buffer_size']}{config['canvas_size']}_{config['action_preset']}.h5"
+    filename = f"rb_{config['mode']}{config['buffer_size']}{config['canvas_size']}_{config['action_preset']}.pt"
     filepath = output_dir / filename
     
-    # Save the buffer to HDF5
-    save_buffer_to_hdf5(buffer, str(filepath))
+    # Save the buffer to PyTorch format
+    save_buffer_to_pt(buffer, str(filepath))
 
     # Minimal assertion to check new fields in at least one transition
     if buffer:
@@ -667,8 +704,9 @@ def main():
 
         print(f"Sample transition new fields: shape={t['shape']}, num_colors_grid={t['num_colors_grid']}, most_present_color={t['most_present_color']}")
 
-        with h5py.File(filepath, "r") as f:
-            print("Top-level keys:", list(f.keys()))
+        # Load and verify the saved data
+        saved_data = torch.load(filepath)
+        print("Top-level keys:", list(saved_data.keys()))
 
 if __name__ == "__main__":
     main()
