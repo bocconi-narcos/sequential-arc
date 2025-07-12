@@ -7,7 +7,7 @@ This guide will walk you through the process of installing and running the Seque
 1. **Clone the repository:**
 
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/bocconi-narcos/sequential-arc.git
    cd sequential-arc
    ```
 
