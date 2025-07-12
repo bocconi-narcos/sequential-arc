@@ -17,8 +17,8 @@ The RL environment (`ARCEnv`) and the structured action space (`ARCActionSpace`)
 ## Installation
 
 ```bash
-git clone <your-repo-url>
-cd <your-repo-name>
+git clone <https://github.com/bocconi-narcos/sequential-arc.git>
+cd <sequential-arc>
 # Example using pip and venv
 python -m venv venv
 source venv/bin/activate # or venv\Scripts\activate on Windows
