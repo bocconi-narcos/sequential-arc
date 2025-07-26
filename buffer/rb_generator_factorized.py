@@ -235,7 +235,6 @@ def generate_buffer_mixed(
 
             # Apply the action to the current grid
             next_state, reward, terminated, truncated, _info = env.step(action)
-            env.render()
             done = terminated or truncated
             
             # Check if the state changed
