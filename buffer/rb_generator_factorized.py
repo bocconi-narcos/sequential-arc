@@ -266,7 +266,7 @@ def generate_buffer_mixed(
             transitions_added += 1
             
             if transitions_added % 10 == 0 or transitions_added == buffer_size:
-                print(f"[Random] Added {transitions_added}/{buffer_size} transitions to buffer. \r", end="")
+                print(f"[Random] Added {transitions_added}/{buffer_size} transitions to buffer which now has length {len(buffer)}. \r", end="")
             current_state = next_state[...,0].copy()
 
             if done:
@@ -358,6 +358,8 @@ def save_buffer_to_pt(buffer: List[Dict[str, Any]], filepath: str):
             tensor_data[key] = data
         else:
             tensor_data[key] = torch.tensor(np.array(data))
+
+    print(f"Saving {len(buffer)} transitions to {filepath}...")
 
     torch.save(tensor_data, filepath)
     print(f"Successfully saved buffer with {len(buffer)} transitions to {filepath}")
