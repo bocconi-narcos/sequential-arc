@@ -1,0 +1,37 @@
+# Buffer generator configuration for ARC replay buffer (Joint Action Space)
+
+# Data source mode: 'challenge', 'random', or 'mixed'
+mode: mixed
+
+# Output file path for the replay buffer
+output_filepath: replay_buffer_joint.pkl
+
+# Maximum number of transitions in the buffer
+buffer_size: 500000
+
+# Number of random actions per grid (challenge mode)
+num_steps_per_grid: 4
+
+# Canvas size for ARCEnv
+canvas_size: 10
+
+# Random seed (set to null for random)
+seed: null
+
+# Action preset for ARCActionSpace
+action_preset: default
+
+# Challenge mode settings
+challenges_json_path: data/challenges.json
+solutions_json_path: data/solutions.json
+max_grid_dim_h: 5  # Max height for initial grids (challenge mode)
+max_grid_dim_w: 5  # Max width for initial grids (challenge mode)
+
+# Random mode settings
+random_grid_h_lambda: 5  # Height of random grid (random mode)
+random_grid_w_lambda: 5  # Width of random grid (random mode)
+random_num_colors: 4  # Number of colors for random grid (random mode)
+random_lambda_poisson: 7.0  # Lambda for Poisson episode length (random mode)
+
+# Skip steps that don't change the state
+skip_no_change_steps: true 

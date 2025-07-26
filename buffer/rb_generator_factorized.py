@@ -276,7 +276,7 @@ def generate_buffer_mixed(
 
     return buffer
 
-def load_config(config_path: str = "buffer/buffer_config.yaml") -> dict:
+def load_config(config_path: str = "buffer/factorized_buffer_config.yaml") -> dict:
     """
     Load YAML config for buffer generation. Raises clear error if missing or malformed.
     """
