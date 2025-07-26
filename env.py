@@ -105,7 +105,7 @@ class ARCEnv(gym.Env):
         solutions_json: str | Path,
         *,
         action_space: ARCActionSpace,
-        canvas_size: int = 30,
+        canvas_size: int = 10,
         step_penalty: int = 1,
         shape_penalty: int = 1,
         no_change_penalty: int = 5,
@@ -257,6 +257,62 @@ class ARCEnv(gym.Env):
         }
         return self.state, {}
     
+    def external_reset(
+        self,
+        grid: np.ndarray,
+        *,
+        seed: int | None = None
+    ):
+        """
+        Reset env with an externally provided padded grid.
+        
+        Parameters
+        ----------
+        grid : np.ndarray
+            Pre-padded grid of shape (canvas_size, canvas_size, 2) where:
+            - grid[..., 0] is the input grid
+            - grid[..., 1] is the target grid
+        seed : int | None, optional
+            Seed parameter (accepted but ignored for compatibility)
+        
+        Returns
+        -------
+        state : np.ndarray
+            The provided grid (same as input)
+        info : dict
+            Empty dict (for compatibility with gym interface)
+        """
+        # Validate grid shape
+        expected_shape = (*self._canvas_shape, 2)
+        if grid.shape != expected_shape:
+            raise ValueError(
+                f"Grid shape {grid.shape} does not match expected shape {expected_shape}"
+            )
+        
+        # Validate grid dtype and values
+        if not np.issubdtype(grid.dtype, np.integer):
+            raise ValueError("Grid must have integer dtype")
+        if grid.min() < -1 or grid.max() >  10:
+            raise ValueError(f"Grid values must be in range [-1, 10], max_value={grid.max()}, min_value={grid.min()}")
+
+        # Clear state like normal reset
+        self._frontier.clear()
+        self._info_q.clear()
+        
+        # Set the provided grid as state
+        self.state = grid.astype(np.int8)
+        
+        # Initialize info dict
+        self.info = {
+            "key":         "random",
+            "actions":     [],
+            "action_desc": [],
+            "num_actions": 0,
+            "solved":      False,
+        }
+        
+        return self.state, {}
+    
     def render(self, *, mode: str = "human"):
         """
         Visualises **before**, **mask**, **after**, **target** and (inset) the
@@ -337,6 +393,33 @@ class ARCEnv(gym.Env):
 
         plt.tight_layout()
         plt.show()
+
+    def apply_action(self, colour_fn, select_fn, transform_fn, current_grid: np.ndarray,) -> np.ndarray:
+        """
+        Apply a single action to the current grid.
+
+        Parameters
+        ----------
+        colour_fn : callable
+            Function to determine the colour to apply.
+        select_fn : callable
+            Function to create a selection mask.
+        transform_fn : callable
+            Function to transform the grid.
+        current_grid : np.ndarray
+            The current grid state, shape (canvas_size, canvas_size, 2).
+
+        Returns
+        -------
+        next_grid : np.ndarray
+            The resulting grid after applying the action.
+        """
+        # Get the colour, selection mask, and next grid
+        colour = colour_fn(current_grid)
+        sel_mask = select_fn(current_grid, colour)
+        next_grid = transform_fn(current_grid, sel_mask)
+
+        return colour, sel_mask, next_grid
     
     def step(self, action):
         assert self.state is not None, "Call reset() before step()."
@@ -345,9 +428,9 @@ class ARCEnv(gym.Env):
 
         # ---------- decode the action ------------------------------------ #
         colour_fn, select_fn, transform_fn = self.action_space.decode(action)
-        colour    = colour_fn(grid = prev_inp)
-        sel_mask  = select_fn(prev_inp, colour)
-        next_grid = transform_fn(prev_inp, sel_mask)
+        colour, sel_mask, next_grid = self.apply_action(
+            colour_fn, select_fn, transform_fn, prev_inp
+        )
 
         # ---------- reward ------------------------------------------------ #
         if next_grid.shape == prev_inp.shape and np.array_equal(next_grid, prev_inp):
