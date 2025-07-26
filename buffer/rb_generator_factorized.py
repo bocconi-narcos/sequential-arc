@@ -3,12 +3,9 @@
 # Usage: python rb_generator_factorized.py
 
 import os
-import pickle
 import numpy as np
 import random
-import json
-from collections import deque
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any
 from pathlib import Path
 import yaml
 import torch
@@ -29,22 +26,19 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from env import ARCEnv
 from action_space import ARCActionSpace
 from dsl.utils.padding import unpad_grid, pad_grid
-from dsl.utils.background import find_background_colour
 from dsl.utils.random_grid import generate_random_grid
 
-from buffer.utils import (load_and_filter_grids, process_state, count_unique_colors,
-                   get_selection_mask, validate_colors, count_unique_colors_exclude_padding, 
+from buffer.utils import (count_unique_colors, validate_colors, count_unique_colors_exclude_padding, 
                      most_present_color_exclude_padding, least_present_color_exclude_padding, get_grid_shape,
                      validate_grid_padding)
-
-
 
 
 def create_transition_dict(
     state: np.ndarray,
     target_state: np.ndarray,
+    color: int,
+    selection_mask: np.ndarray,
     action: Dict[str, int],
-    action_space: ARCActionSpace,
     reward: float,
     next_state: np.ndarray,
     done: bool,
@@ -58,6 +52,7 @@ def create_transition_dict(
         - num_colors_grid: number of unique colors in the unpadded state grid (excluding padding)
         - most_present_color: most frequent color in the unpadded state grid (excluding padding, -1 if empty)
     """
+
     # Validate colors before padding
     validate_colors(state, "state")
     validate_colors(target_state, "target_state")
@@ -80,12 +75,7 @@ def create_transition_dict(
     state_padded                    = pad_grid(state, (canvas_size, canvas_size))
     target_state_padded             = pad_grid(target_state, (canvas_size, canvas_size))
     next_state_padded               = pad_grid(next_state, (canvas_size, canvas_size))
-    selection_mask                  = get_selection_mask(action_space, action, state)
     selection_mask_padded           = pad_grid(selection_mask.astype(np.int8), (canvas_size, canvas_size))
-
-    # Determine the ARC colour: output of the color selection function
-    colour_fn, _, _                 = action_space.decode(action)
-    arc_colour                      = colour_fn(state)
 
     # Compute new fields from the unpadded state
     shape                           = get_grid_shape(state)
@@ -111,8 +101,8 @@ def create_transition_dict(
             "selection": action["selection"],
             "transform": action["transform"],
         },
-        
-        "colour": int(arc_colour),
+
+        "colour": int(color),
         "selection_mask": selection_mask_padded,
         "reward": float(reward),
         "shape": shape,
@@ -141,183 +131,16 @@ def create_transition_dict(
 
     return transition
 
-
-def generate_buffer_from_challenges(
-    env: ARCEnv,
-    action_space: ARCActionSpace,
-    valid_initial_grids: List,
-    buffer_size: int,
-    num_steps_per_grid: int,
-    canvas_size: int,
-) -> List[Dict[str, Any]]:
-    """
-    Generate a replay buffer from the challenge dataset, padding all grids to (canvas_size, canvas_size).
-    Always call env.reset() at the start of each episode.
-    """
-    buffer                          = []
-    transitions_added               = 0
-
-    while len(buffer) < buffer_size:
-        task_key, example_index     =   random.choice(valid_initial_grids)
-        
-        print(f"\n[Challenge] Starting new episode: task_key={task_key}, example_index={example_index}, buffer size={len(buffer)}/{buffer_size}")
-
-        example                     = env._challenges[task_key]['train'][example_index]
-        input_grid                  = np.array(example['input'])
-        output_grid                 = np.array(env._solutions[task_key])
-
-        # Always reset the environment at the start of each episode
-        try:
-            obs, info               = env.reset(options={"input_grid": input_grid, "target_grid": output_grid})
-        
-        except TypeError:
-            # If env.reset does not accept options, just call reset()
-            obs, info               = env.reset()
-        
-        # Extract the initial state and target state from the observation
-        state                       = unpad_grid(obs[..., 0])
-        target_state                = unpad_grid(obs[..., 1])
-        
-        for step in range(num_steps_per_grid):
-            if len(buffer) >= buffer_size:
-                break
-            action                  = action_space.sample()
-
-            
-            next_observation, reward, terminated, truncated, _info = env.step(action)
-            done                = terminated or truncated
-            next_state          = unpad_grid(next_observation[..., 0])
-
-            
-            info                = {"transition_type": "challenge"}
-            
-            transition          = create_transition_dict(
-                state=state,
-                target_state=target_state,
-                action=action,
-                action_space=action_space,
-                reward=reward,
-                next_state=next_state,
-                done=done,
-                info=info,
-                canvas_size=canvas_size,
-            )
-
-            buffer.append(transition)
-            transitions_added  += 1
-            
-            if transitions_added % 10 == 0 or transitions_added == buffer_size:
-                print(f"[Challenge] Added {transitions_added}/{buffer_size} transitions to buffer.")
-            
-            state               = next_state.copy()
-            
-            if done:
-                break
-
-    print(f"[Challenge] Buffer generation complete. Total transitions: {len(buffer)}")
-    return buffer
-
-
-def generate_buffer_from_random(
-    env: ARCEnv,
-    action_space: ARCActionSpace,
-    buffer_size: int,
-    grid_shape: tuple,
-    num_colors: int,
-    lambda_poisson: float = 7.0,
-    canvas_size: int = 10,
-) -> List[Dict[str, Any]]:
-    """
-    Generate a replay buffer from random grids and random actions, padding all grids to (canvas_size, canvas_size).
-    """
-
-    buffer                          = []
-    transitions_added               = 0
-    while len(buffer) < buffer_size:
-        num_colors                  = np.clip(np.random.poisson(3) + 2, 2, 10)
-        state                       = generate_random_grid(grid_shape, num_colors)
-        n                           = np.random.poisson(lambda_poisson)
-        n                           = max(1, n)
-        print(f"\n[Random] Starting new episode: grid_shape={grid_shape}, num_colors={num_colors}, episode_length={n}, buffer size={len(buffer)}/{buffer_size}")
-        
-        # Reset environment to get a clean state
-        obs, info                   = env.reset()
-
-        # 2. Generate the sequence of actions that will lead to the target state
-        action_sequence             = []
-        temp_grid                   = state.copy()
-        
-        for _ in range(n):
-            action                  = action_space.sample()
-            action_sequence.append(action)
-            try:
-                _, selection_fn, transform_fn = action_space.decode(action)
-                selection_mask      = get_selection_mask(action_space, action, temp_grid)
-                temp_grid           = transform_fn(temp_grid, selection_mask)
-            except Exception:
-                continue
-        
-        target_state                = temp_grid.copy()
-        
-        # 3. Roll out the episode using the exact same action sequence, storing transitions
-        current_grid                = state.copy()
-        action_idx                  = 0
-        for step in range(n):
-            if len(buffer) >= buffer_size or action_idx >= len(action_sequence):
-                break
-            
-            # Use the pre-generated action from the sequence
-            action                  = action_sequence[action_idx]
-            action_idx              += 1
-            
-            try:
-                next_observation, reward, terminated, truncated, _info = env.step(action)
-                selection_mask      = get_selection_mask(action_space, action, current_grid)
-                next_state          = unpad_grid(next_observation[..., 0])
-                done                = (step == n - 1)
-                # Correct step_distance_to_target: 1 for last step, 2 for penultimate, etc.
-                step_distance       = n - step
-                info                = {"step_distance_to_target": step_distance, "transition_type": "random"}
-                
-                transition          = create_transition_dict(
-                    state=current_grid,
-                    target_state=target_state,
-                    action=action,
-                    action_space=action_space,
-                    reward=reward,
-                    next_state=next_state,
-                    done=done,
-                    info=info,
-                    canvas_size=canvas_size,
-                )
-                
-                buffer.append(transition)
-                transitions_added   += 1
-                
-                if transitions_added % 10 == 0 or transitions_added == buffer_size:
-                    print(f"[Random] Added {transitions_added}/{buffer_size} transitions to buffer.")
-                
-                current_grid        = next_state.copy()
-                
-                if done:
-                    break
-            except Exception:
-                continue
-
-    print(f"[Random] Buffer generation complete. Total transitions: {len(buffer)}")
-    return buffer
-
 def generate_buffer_mixed(
     env: ARCEnv,
     action_space: ARCActionSpace,
-    valid_initial_grids: List,
     buffer_size: int,
     num_steps_per_grid: int,
     canvas_size: int,
     grid_shape_lambda: tuple,
     num_colors: int,
     lambda_poisson: float = 7.0,
-    skip_no_change_steps: bool = False,
+    probability_of_solving = 0.5,
 ) -> List[Dict[str, Any]]:
     """
     Generate a replay buffer from a mix of random grids and actual ARC challenges and random actions, padding all grids to (canvas_size, canvas_size).
@@ -332,150 +155,126 @@ def generate_buffer_mixed(
     col_lambda                  = grid_shape_lambda[1]
     
     while len(buffer) < buffer_size:
-        # Randomly choose between challenge and random (3/97)
-        use_challenge               = random.random() < 0.03
-        if use_challenge:
-            # --- Challenge episode (like generate_buffer_from_challenges) ---
-            task_key, example_index = random.choice(valid_initial_grids)
-            
-            print(f"\n[Challenge] Starting new episode: task_key={task_key}, example_index={example_index}, buffer size={len(buffer)}/{buffer_size}")
-            
-            example                 = env._challenges[task_key]['train'][example_index]
-            input_grid              = np.array(example['input'])
-            output_grid             = np.array(env._solutions[task_key])
-            # Always reset the environment at the start of each episode
-            try:
-                obs, info           = env.reset(options={"input_grid": input_grid, "target_grid": output_grid})
-            except TypeError:
-                # If env.reset does not accept options, just call reset()
-                obs, info           = env.reset()
-            
-            # Extract the initial state and target state from the observation
-            state                   = unpad_grid(obs[..., 0])
-            target_state            = unpad_grid(obs[..., 1])
-            
-            step                    = 0
-            while step < num_steps_per_grid:
-                if len(buffer) >= buffer_size:
-                    break
+       
+        # --- Random episode (like generate_buffer_from_random) ---
+        # 1. Generate initial random grid
+        num_rows                = np.clip(np.random.poisson(row_lambda) + 2, 2, 10)
+        num_cols                = np.clip(np.random.poisson(col_lambda) + 2, 2, 10)
+        grid_shape              = (num_rows, num_cols)
+
+        num_colors              = np.clip(np.random.poisson(3) + 2, 2, 10)
+        state                   = generate_random_grid(grid_shape, num_colors)
+        n                       = np.random.poisson(lambda_poisson)
+        n                       = max(1, n)
+        probability_of_changing_action = 1 - probability_of_solving ** (1/n)
+
+        # 2. Generate the sequence of actions that will lead to the target state
+        action_sequence_to_target         = []
+        temp_grid               = state.copy()
+        for _ in range(n):
+            grid_collapsed = True
+            while grid_collapsed:
                 action              = action_space.sample()
-                
-                next_observation, reward, terminated, truncated, _info = env.step(action)
-   
-                done            = terminated or truncated
-                next_state      = unpad_grid(next_observation[..., 0])
-                
-                # Check if state changed when skip_no_change_steps is enabled
-                state_changed = not np.array_equal(state, next_state)
-                
-                info            = {"transition_type": "challenge"}
-                transition      = create_transition_dict(
-                    state=state,
-                    target_state=target_state,
-                    action=action,
-                    action_space=action_space,
-                    reward=reward,
-                    next_state=next_state,
-                    done=done,
-                    info=info,
-                    canvas_size=canvas_size,
+                colour_fn, selection_fn, transform_fn = action_space.decode(action)
+                colour, selection_mask, new_temp_grid = env.apply_action(
+                    colour_fn, selection_fn, transform_fn, temp_grid
                 )
-                buffer.append(transition)
-                transitions_added += 1
-                
-                if transitions_added % 10 == 0 or transitions_added == buffer_size:
-                    print(f"[Challenge] Added {transitions_added}/{buffer_size} transitions to buffer.")
-                state = next_state.copy()
-                
-                # Only increment step counter if state changed or if skip_no_change_steps is False
-                if state_changed or not skip_no_change_steps:
-                    step += 1
-                
-                if done:
-                    break
+                # If all cells are not of the same color, we can use this action
+                num_unique_colors = count_unique_colors(new_temp_grid)
+                if num_unique_colors > 1:
+                    grid_collapsed = False
+                    temp_grid = new_temp_grid
 
-
-        else:
-            # --- Random episode (like generate_buffer_from_random) ---
-            # 1. Generate initial random grid
-            num_rows                = np.clip(np.random.poisson(row_lambda) + 2, 2, 10)
-            num_cols                = np.clip(np.random.poisson(col_lambda) + 2, 2, 10)
-            grid_shape              = (num_rows, num_cols)
-
-            num_colors              = np.clip(np.random.poisson(3) + 2, 2, 10)
-            state                   = generate_random_grid(grid_shape, num_colors)
-            n                       = np.random.poisson(lambda_poisson)
-            n                       = max(1, n)
-            print(f"\n[Random] Starting new episode: grid_shape={grid_shape}, num_colors={num_colors}, episode_length={n}, buffer size={len(buffer)}/{buffer_size}")
-            # Reset environment to get a clean state
-            obs, info               = env.reset()
-            
-            # 2. Generate the sequence of actions that will lead to the target state
-            action_sequence         = []
-            temp_grid               = state.copy()
-            for _ in range(n):
+            action_sequence_to_target.append(action)
+        
+        action_sequence       = []
+        color_sequence        = []
+        mask_sequence         = []
+        next_state_sequence   = []
+        temp_grid               = state.copy()
+        one_action_changed = False
+        for i in range(n):
+            if np.random.rand() < probability_of_changing_action:
                 action              = action_space.sample()
-                action_sequence.append(action)
-                try:
-                    _, selection_fn, transform_fn = action_space.decode(action)
-                    selection_mask  = get_selection_mask(action_space, action, temp_grid)
-                    temp_grid       = transform_fn(temp_grid, selection_mask)
-                except Exception:
-                    # If action fails, just continue with current grid
-                    continue
+                one_action_changed = True
+            elif one_action_changed:
+                action = action_space.sample()
+            else:
+                action = action_sequence_to_target[i]
 
-            target_state            = temp_grid.copy()
+            colour_fn, selection_fn, transform_fn = action_space.decode(action)
+            colour, selection_mask, temp_grid = env.apply_action(
+                colour_fn, selection_fn, 
+                transform_fn, temp_grid
+            )
+            action_sequence.append(action)
+            color_sequence.append(colour)
+            mask_sequence.append(selection_mask)
+            next_state_sequence.append(temp_grid.copy())
+
+        target_state            = temp_grid.copy()
+
+        padded_target_state = pad_grid(target_state, (canvas_size, canvas_size))
+        padded_start_state = pad_grid(state, (canvas_size, canvas_size))
+        env_reset_state = np.stack([padded_start_state, padded_target_state], axis=-1)
+
+        # Reset the environment with the initial state
+        state, info = env.external_reset(env_reset_state)
+        
+        # 3. Roll out the episode using the exact same action sequence, storing transitions
+        current_state            = state[..., 0].copy()  # Get the initial grid from the reset state
+        action_idx              = 0
+        step                    = 0
+
+        while step < n and action_idx < len(action_sequence):
+            if len(buffer) >= buffer_size:
+                break
+
+            # Use the pre-generated action from the sequence
+            action = action_sequence[action_idx]
+
+            # Apply the action to the current grid
+            next_state, reward, terminated, truncated, _info = env.step(action)
+            env.render()
+            done = terminated or truncated
             
-            # 3. Roll out the episode using the exact same action sequence, storing transitions
-            current_grid            = state.copy()
-            action_idx              = 0
-            step                    = 0
-            while step < n and action_idx < len(action_sequence):
-                if len(buffer) >= buffer_size:
-                    break
-                
-                # Use the pre-generated action from the sequence
-                action              = action_sequence[action_idx]
-                action_idx          += 1
-                
-                try:
-                    next_observation, reward, terminated, truncated, _info = env.step(action)
-                    selection_mask  = get_selection_mask(action_space, action, current_grid)
-                    next_state      = unpad_grid(next_observation[..., 0])
-                    
-                    # Check if state changed when skip_no_change_steps is enabled
-                    state_changed = not np.array_equal(current_grid, next_state)
-                    
-                    done            = (step == n - 1)
-                    # Correct step_distance_to_target: 1 for last step, 2 for penultimate, etc.
-                    step_distance   = n - step
-                    info            = {"step_distance_to_target": step_distance, "transition_type": "random"}
-                    transition      = create_transition_dict(
-                        state=current_grid,
-                        target_state=target_state,
-                        action=action,
-                        action_space=action_space,
-                        reward=reward,
-                        next_state=next_state,
-                        done=done,
-                        info=info,
-                        canvas_size=canvas_size,
-                    )
-                    buffer.append(transition)
-                    transitions_added += 1
-                    
-                    if transitions_added % 10 == 0 or transitions_added == buffer_size:
-                        print(f"[Random] Added {transitions_added}/{buffer_size} transitions to buffer.")
-                    current_grid = next_state.copy()
-                    
-                    # Only increment step counter if state changed or if skip_no_change_steps is False
-                    if state_changed or not skip_no_change_steps:
-                        step += 1
-                except Exception:
-                    # If action fails, skip it and continue
-                    continue
+            # Check if the state changed
+            next_state_unpadded = unpad_grid(next_state[..., 0])
+            assert np.all(next_state_unpadded == next_state_sequence[action_idx])
 
-    print(f"[Mixed] Buffer generation complete. Total transitions: {len(buffer)}")
+            current_state_unpadded = unpad_grid(current_state)
+            target_state_unpadded = unpad_grid(target_state)
+
+            current_color = color_sequence[action_idx]
+            current_mask = mask_sequence[action_idx]
+            
+            # Correct step_distance_to_target: 1 for last step, 2 for penultimate, etc.
+            step_distance   = n - step
+            info            = {"step_distance_to_target": step_distance, "transition_type": "random"}
+            transition      = create_transition_dict(
+                state=current_state_unpadded,
+                target_state=target_state_unpadded,
+                color=current_color,
+                selection_mask=current_mask,
+                action=action,
+                reward=reward,
+                next_state= next_state_unpadded,
+                done=done,
+                info=info,
+                canvas_size=canvas_size,
+            )
+            buffer.append(transition)
+            transitions_added += 1
+            
+            if transitions_added % 10 == 0 or transitions_added == buffer_size:
+                print(f"[Random] Added {transitions_added}/{buffer_size} transitions to buffer. \r", end="")
+            current_state = next_state[...,0].copy()
+
+            if done:
+                break
+            
+            action_idx += 1
+
     return buffer
 
 def load_config(config_path: str = "buffer/buffer_config.yaml") -> dict:
@@ -572,29 +371,6 @@ def main():
     """
     config                          = load_config()
     
-    # Set defaults for any missing fields (should match buffer_config.yaml)
-    defaults                        = {
-        'mode': 'mixed',
-        'buffer_size': 500000,
-        'num_steps_per_grid': 5,
-        'canvas_size': 10,
-        'seed': None,
-        'action_preset': 'default',
-        'challenges_json_path': 'data/challenges.json',
-        'solutions_json_path': 'data/solutions.json',
-        'max_grid_dim_h': 5,
-        'max_grid_dim_w': 5,
-        'random_grid_h': 5,
-        'random_grid_w': 5,
-        'random_num_colors': 4,
-        'random_lambda_poisson': 7.0,
-        'skip_no_change_steps': True,
-    }
-    
-    for k, v in defaults.items():
-        if k not in config or config[k] is None:
-            config[k]               = v
-
     # Validate random_num_colors
     if config['random_num_colors'] > 10:
         raise ValueError("random_num_colors must be <= 10 (ARC palette constraint)")
@@ -607,7 +383,7 @@ def main():
         np.random.seed(None)
 
     action_space = ARCActionSpace(preset=config['action_preset'], mode="factorized")
-    env                             = ARCEnv(
+    env    = ARCEnv(
         challenges_json=config['challenges_json_path'],
         solutions_json=config['solutions_json_path'],
         action_space=action_space,
@@ -615,72 +391,16 @@ def main():
         seed=config['seed']
     )
     
-    # Load solutions and challenges data
-    with open(config['solutions_json_path'], 'r') as f:
-        solutions_data = json.load(f)
-    with open(config['challenges_json_path'], 'r') as f:
-        challenges_data = json.load(f)
-    
-    if config['mode'] == "challenge":
-        valid_initial_grids = []
-        for task_key in challenges_data:
-            if 'train' in challenges_data[task_key]:
-                for i, example in enumerate(challenges_data[task_key]['train']):
-                    input_grid = np.array(example['input'])
-                    output_grid = np.array(solutions_data[task_key])
-                    if (input_grid.shape[0] <= config['max_grid_dim_h'] and input_grid.shape[1] <= config['max_grid_dim_w'] and
-                        output_grid.shape[0] <= config['max_grid_dim_h'] and output_grid.shape[1] <= config['max_grid_dim_w']):
-                        valid_initial_grids.append((task_key, i))
-        if not valid_initial_grids:
-            print(f"No initial grids found matching criteria (max_h={config['max_grid_dim_h']}, max_w={config['max_grid_dim_w']}). Exiting.")
-            return
-        buffer                      = generate_buffer_from_challenges(
-            env=env,
-            action_space=action_space,
-            valid_initial_grids=valid_initial_grids,
-            buffer_size=config['buffer_size'],
-            num_steps_per_grid=config['num_steps_per_grid'],
-            canvas_size=config['canvas_size'],
-        )
-    
-    elif config['mode'] == "random":
-        buffer = generate_buffer_from_random(
-            env=env,
-            action_space=action_space,
-            buffer_size=config['buffer_size'],
-            grid_shape=(config['random_grid_h_lambda'], config['random_grid_w_lambda']),
-            num_colors=config['random_num_colors'],
-            lambda_poisson=config['random_lambda_poisson'],
-            canvas_size=config['canvas_size'],
-        )
-    
-    elif config['mode'] == "mixed":
-        valid_initial_grids = []
-        for task_key in challenges_data:
-            if 'train' in challenges_data[task_key]:
-                for i, example in enumerate(challenges_data[task_key]['train']):
-                    input_grid = np.array(example['input'])
-                    output_grid = np.array(solutions_data[task_key])
-                    if (input_grid.shape[0] <= config['max_grid_dim_h'] and input_grid.shape[1] <= config['max_grid_dim_w'] and
-                        output_grid.shape[0] <= config['max_grid_dim_h'] and output_grid.shape[1] <= config['max_grid_dim_w']):
-                        valid_initial_grids.append((task_key, i))
-        if not valid_initial_grids:
-            print(f"No initial grids found matching criteria (max_h={config['max_grid_dim_h']}, max_w={config['max_grid_dim_w']}). Exiting.")
-            return
-        buffer                      = generate_buffer_mixed(
-            env=env,
-            valid_initial_grids=valid_initial_grids,
-            num_steps_per_grid=config['num_steps_per_grid'],
-            action_space=action_space,
-            buffer_size=config['buffer_size'],
-            grid_shape_lambda=(config['random_grid_h'], config['random_grid_w']),
-            num_colors=config['random_num_colors'],
-            lambda_poisson=config['random_lambda_poisson'],
-            canvas_size=config['canvas_size'],
-            skip_no_change_steps=config['skip_no_change_steps'],
-        )
-    else:
-        raise ValueError(f"Invalid mode: {config['mode']}")
+    buffer                      = generate_buffer_mixed(
+        env=env,
+        num_steps_per_grid=config['num_steps_per_grid'],
+        action_space=action_space,
+        buffer_size=config['buffer_size'],
+        grid_shape_lambda=(config['random_grid_h_lambda'], config['random_grid_w_lambda']),
+        num_colors=config['random_num_colors'],
+        lambda_poisson=config['random_lambda_poisson'],
+        canvas_size=config['canvas_size'],
+    )
 
     # --- Saving Logic ---
     # Define output directory and ensure it exists
